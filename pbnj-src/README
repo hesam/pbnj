@@ -3,10 +3,10 @@ The PBnJ Compiler
 
 This software distribution contains an extension to Polyglot compiler
 framework (http://www.cs.cornell.edu/Projects/polyglot) that adds
-support for the ESJ extension to Java.  Information about the ESJ
+support for the PBnJ extension to Java.  Information about the PBnJ
 language is available here:
 
-http://www.cs.ucla.edu/~hesam
+https://www.hesam.us/cs/planb/index.html
 
 The PBnJ compiler extends an existing extension to the Polyglot
 compiler, which adds support for Java 1.5 language features.  A
