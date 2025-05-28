@@ -1,0 +1,80 @@
+package at.ac.testing.pbnj.test6;
+
+public class TimedAction {
+
+	// Default values	
+	spec public int time = -1;
+	spec public int startSize= -1;
+	spec public int targetSize= -1;
+	
+	spec public ActionType type;
+
+	
+	public TimedAction(){ }
+	
+	// ONLY DEBUG !
+	public TimedAction(int time, int startSize, int targetSize, ActionType type){
+		this.time = time;
+		this.startSize = startSize;
+		this.targetSize = targetSize;
+		this.type = type;
+	}
+	
+	public TimedAction(int time, int startSize, int targetSize){
+		this.time = time;
+		this.startSize = startSize;
+		this.targetSize = targetSize;
+	}
+	
+	public TimedAction(int time, int startSize, ActionType type){
+		this.time = time;
+		this.startSize = startSize;
+		this.type = type;
+	}
+	
+	public TimedAction(int time, ActionType type){
+		this.time = time;
+		this.type = type;
+	}
+	
+	public TimedAction(int time, ActionType type, int targetSize){
+		this.time = time;
+		this.type = type;
+		this.targetSize = targetSize;
+	}
+	
+
+	spec public boolean equalsTo(TimedAction t){
+		return
+			this.time == t.time &&
+			this.startSize == t.startSize &&
+			this.targetSize == t.targetSize &&
+			this.type == t.type // Not sure about this really, should be implied ?
+		; 
+	} 
+
+	// TODO Can be simplified ?
+	spec public boolean validType() {
+		return
+		// Note the type depends only on the start/target size, therefore the condition this.time > -1 must be removed
+		( this.startSize > -1 && this.targetSize > -1 ) ==> (
+			( this.startSize < this.targetSize && this.type == ActionType.SCALE_UP ) ||
+			( this.startSize > this.targetSize && this.type == ActionType.SCALE_DOWN ) ||
+			( this.startSize == this.targetSize && this.type == ActionType.STAY ) )
+		;
+	}
+	
+	spec public boolean valid() {
+		return
+			time >= 0 &&
+			startSize >= 0 &&
+			targetSize >= 0 &&
+			validType()
+		;
+	}
+
+	public String toString() {
+		// return "Timed Action (" + hashCode() + "): " + type + " ["+startSize + " --> " + targetSize + "] @ " + time;
+		return	String.format("%4d : %-11s\t [%3d --> %3d]\t (%d)", time, type, startSize, targetSize, hashCode()); 
+    }
+}

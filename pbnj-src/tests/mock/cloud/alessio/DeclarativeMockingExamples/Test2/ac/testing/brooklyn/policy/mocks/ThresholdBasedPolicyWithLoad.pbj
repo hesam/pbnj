@@ -1,0 +1,95 @@
+package at.ac.testing.brooklyn.policy.mocks;
+
+import at.ac.testing.mocks.RequestsCount;
+
+public class ThesholdBasedPolicyWithLoad
+	ensures valid(){
+
+	spec int lowerBound;
+	spec int upperBound;
+
+	spec boolean valid(){
+		return true &&
+			this.lowerBound >= 0 &&
+			this.upperBound >= this.lowerBound;
+	}
+
+	public ThesholdBasedPolicyWithLoad(int lowerBound, int upperBound) {
+		this.lowerBound = lowerBound;
+		this.upperBound = upperBound;
+	}
+
+	public String toString() {
+    	return ""+ 
+    		"Lower Bound " 	+ this.lowerBound 		+ "\n" +
+    		"Upper Bound " 	+ this.upperBound 		+ "\n";
+    }
+    
+    // THIS WAS ONLY FOR TESTING
+	//pure fresh public RequestsCount resize(int currentSize, int targetSize)
+	//	adds 1 RequestsCount
+	//	ensures
+	//		( ( currentSize < targetSize) ==>  scalesUp(result, currentSize, targetSize) ) 
+    //	&&	( ( currentSize > targetSize) ==> scalesDown(result, currentSize, targetSize) )
+    // 	&&	validRequestsCountForTargetConfiguration(result, currentSize, targetSize)
+    // {
+    // 	return null;
+    // }
+    
+    
+    /**
+	 * A valid requestsCount for a target configuration must take the value of the target metric between
+	 * the Lower and Upper bounds of the target Configuration.
+	 
+	 NOTE THAT WE WORK WITH INTEGERS !
+	 */
+	spec public boolean validRequestsCountForTargetConfiguration(RequestsCount requestsCount, int currentSize, int targetSize){
+		return true &&
+			( requestsCount.requests >= targetSize * lowerBound ) &&
+			( requestsCount.requests <= targetSize * upperBound )
+		; 
+	}
+
+	/** 
+	 * This Description Taken by the comments inside the AutoScalerPolicy class:
+	 * We always scale out (modulo stabilization delay) if:
+	 * 	currentTotalActivity > currentSize*metricUpperBound 
+	 * With newDesiredSize the smallest n | n * metricUpperBound >= currentTotalActivity,
+	 * that is,
+	 *	n >= currentTotalActiviy/metricUpperBound,
+	 * thus n := Math.ceil(currentTotalActivity/metricUpperBound)
+	 */
+    spec public boolean scalesUp(RequestsCount requestsCount, int currentSize, int targetSize){
+		return true
+		// We need to trigger a scale up
+		&&	( requestsCount.requests > currentSize * upperBound )
+// We require also a stronger condition for INTEGERS - What if currentSize == 0 ? 
+//		&&	( requestsCount.requests / currentSize > upperBound ) -> THIS CONDITION IS ACTUALLY LIMITING THE WHOLE THING
+// SO WE CHANGED THE TEST DEFINITION TO USE A DOUBLE SENSOR INSTEAD OF AN INTEGER ONE !
+		// But we need to avoid to trigger the wrong (smaller) scale up !
+		&& ( requestsCount.requests > ( targetSize - 1) * upperBound )
+		;
+	}
+	
+	
+    /**
+     * This Description Taken by the comments inside the AutoScalerPolicy class:
+     * Else consider scale back if:
+     *		currentTotalActivity < currentSize * metricLowerBound
+     * With newDesiredSize normally the largest
+     *		n | n * metricLowerBound <= currentTotalActivity 
+     * BUT with an absolute requirement which trumps the above computation that
+     * newDesiredSize doesn't cause immediate scale out: n * metricUpperBound >= currentTotalActivity thus
+     * n := Math.max ( floor(currentTotalActiviy/metricLowerBound), ceil(currentTotal/metricUpperBound) )
+     */
+	spec public boolean scalesDown(RequestsCount requestsCount, int currentSize, int targetSize){
+	    
+		return true
+		// We need to trigger a scale down
+		&&	( requestsCount.requests < currentSize * lowerBound )
+//		&&	( requestsCount.requests / currentSize > lowerBound ) && -> THIS CONDITION IS ACTUALLY LIMITING THE WHOLE THING
+		// We need to avoid to trigger the wrong (bigger) scale down 
+		&& ( requestsCount.requests < ( targetSize + 1 ) * lowerBound )
+		;
+	}
+}

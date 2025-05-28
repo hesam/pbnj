@@ -1,0 +1,12 @@
+#!/bin/bash
+PLATFORM=unknown
+unamestr=`uname`
+if [ "$unamestr" == 'Linux' ]; then
+   PLATFORM=linux
+elif [ "$unamestr" == 'Darwin' ]; then
+   PLATFORM=mac
+fi
+JAVA_LIB_CLASSES=$PBNJ_HOME/tests/classes
+SOLVERDIR=$PBNJ_HOME/lib/solver
+CURRDIR=`pwd`
+java -ea -cp $JAVA_LIB_CLASSES:$PBNJ_HOME/classes:$SOLVERDIR/kodkod/jar/kodkod.jar:$CURRDIR:$PBNJ_CLASSPATH -Djava.library.path=$SOLVERDIR/x86-$PLATFORM $@

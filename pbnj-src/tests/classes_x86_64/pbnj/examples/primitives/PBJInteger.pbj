@@ -1,0 +1,29 @@
+package pbnj.examples.primitives;
+
+import java.util.HashMap;
+
+public final primitive class PBJInteger
+    implements java.io.Serializable
+{
+    spec private int value;
+    
+    private static HashMap<Integer,PBJInteger> instances = new HashMap<Integer,PBJInteger>();
+
+    public static PBJInteger get(int original) {
+	if (instances.containsKey(original))
+	    return instances.get(original);
+	return new PBJInteger(original);
+    }
+
+    public PBJInteger(int i) {
+	this.value = i;
+	if (!instances.containsKey(i))
+	    instances.put(i, this);
+    }
+
+    spec public int value() { return value; }
+
+    public String toString() {
+	return value + "";
+    }
+}

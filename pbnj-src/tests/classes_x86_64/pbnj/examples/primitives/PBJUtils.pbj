@@ -1,0 +1,16 @@
+package pbnj.examples.primitives;
+
+import polyglot.ext.pbnj.primitives.PBJInternSet;
+import polyglot.ext.pbnj.tologic.LogMap;
+
+public class PBJUtils<E> {
+
+    spec public static int Max(int a, int b) { return a >= b ? a : b; }
+    spec public static int Min(int a, int b) { return a <= b ? a : b; }
+    spec public static int Abs(int a) { return a >= 0 ? a : -a; }
+
+    spec public int indexOf(E[] array, E o) {
+	return { some int i: 0 .. array.length - 1 | array[i] == o };
+    } 
+
+}

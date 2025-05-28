@@ -1,0 +1,56 @@
+package at.ac.testing.pbnj.test10;
+
+//import org.testng.annotations.Test;
+
+import polyglot.ext.pbnj.tologic.LogMap;
+
+public class Test10 {
+	int monitoringPeriod = 3;
+
+	ThresholdBasedPolicy policy;
+
+    //	@Test
+	public void compute9() {
+
+	LogMap.SolverOpt_debugLevel(1);
+
+	    /*
+		LogMap.SolverOpt_IntBitWidth = 7;
+		try {
+			policy = new ThresholdBasedPolicy(10, 50);
+			policy.MAX_INT = (int) Math.pow(2, 7) / 2 - 1;
+			policy.resize(8, 7);
+		} catch (Throwable e) {
+			if (e.getMessage() != null && e.getMessage().contains("UNSAT")) {
+				// OK !!
+			}
+		}
+	    */
+		LogMap.SolverOpt_IntBitWidth = 8;
+
+		policy = new ThresholdBasedPolicy(10, 50);
+		policy.MAX_INT = (int) Math.pow(2, 8) / 2 - 1;
+		System.out.println(" \n\n\n THIS MUST BE 9 OR UNSAT !!! " + policy.resize(8, 7));
+		System.out.println(policy);
+		/*
+		LogMap.SolverOpt_IntBitWidth = 9;
+
+		policy = new ThresholdBasedPolicy(10, 50);
+		policy.MAX_INT = (int) Math.pow(2, 9) / 2 - 1;
+		System.out.println(policy.resize(8, 7));
+
+		LogMap.SolverOpt_IntBitWidth = 10;
+
+		policy = new ThresholdBasedPolicy(10, 50);
+		policy.MAX_INT = (int) Math.pow(2, 10) / 2 - 1;
+		System.out.println(policy.resize(8, 7));
+		*/
+	}
+
+	public static void main(String[] args) {
+		Test10 test = new Test10();
+
+		test.compute9();
+
+	}
+}

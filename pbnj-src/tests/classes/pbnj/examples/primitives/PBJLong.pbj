@@ -1,0 +1,29 @@
+package pbnj.examples.primitives;
+
+import java.util.HashMap;
+
+public final primitive class PBJLong
+    implements java.io.Serializable
+{
+    private Long value;
+    
+    private static HashMap<Long,PBJLong> instances = new HashMap<Long,PBJLong>();
+
+    public static PBJLong get(Long original) {
+	if (instances.containsKey(original))
+	    return instances.get(original);
+	return new PBJLong(original);
+    }
+
+    public PBJLong(Long f) {
+	this.value = f;
+	if (!instances.containsKey(f))
+	    instances.put(f, this);
+    }
+
+    public Long value() { return value; }
+
+    public String toString() {
+	return value == null ? null : value.toString();
+    }
+}

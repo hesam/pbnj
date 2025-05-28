@@ -1,0 +1,30 @@
+package at.ac.testing.mocks;
+
+import polyglot.ext.pbnj.tologic.*;
+import polyglot.ext.pbnj.primitives.*;
+import pbnj.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+
+public class SuperClass {
+
+// Inside SuperClass.pbj 
+public void init() {
+	// Check if the provided settings are valid
+	//assume validConfiguration();
+	// Pick up a valid number of elements to generate according to the configuration (minSize, maxSize)
+	//validSizeH();
+	// Generate up to this.size elements
+	initH();
+}
+
+// Inside SuperClass.pbj 
+void initH()
+    modifies fields NewSchedule:actions, NewSchedule:duration// , NewSchedule:TEMP_VAR // Update the internal state !
+	adds 2 TimedAction
+	ensures
+//a lot of conditions ...
+    false
+    {	}
+}

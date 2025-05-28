@@ -1,0 +1,210 @@
+package at.ac.testing.brooklyn.policy.mocks;
+
+import polyglot.ext.pbnj.tologic.*;
+import polyglot.ext.pbnj.primitives.*;
+import at.ac.testing.mocks.*;
+import pbnj.util.ArrayList;
+import java.util.Arrays;
+
+
+
+// TODO Rename this to somehting else, or define additional Mocks to be included here !
+// For example, hot/cold sensors, min/max sensors, etc
+// At the moment this policy encode the elasticity logic of the onMetric part
+// 
+public class AutoScalerPolicyMock
+	ensures valid(){
+    
+    spec ThesholdBasedPolicy thesholdBasedPolicy;
+    
+    // NOT SURE
+    spec int size;    
+    spec int minSize;
+    
+    spec int maxSize;
+    
+    /**
+     * Class Invariant
+     */
+    spec boolean valid(){
+    	return true &&
+    		// Size Conditions
+    		this.minSize >= 0 &&
+			this.maxSize >= this.minSize &&
+			
+			validConfiguration() &&
+			
+			// Policy Conditions
+			thesholdBasedPolicy != null &&
+			thesholdBasedPolicy.valid();
+    }
+    
+    /**
+     * Define a valid size for the pool
+     */
+    spec boolean validConfiguration() {
+		return true &&
+			this.size >= this.minSize &&
+			this.size <= this.maxSize;
+	}
+    
+    /**
+	 * A valid requestsCount object must be not null and valid()
+	 */
+	spec boolean validRequestsCount(RequestsCount requestsCount){
+		return true &&
+			requestsCount != null &&
+			requestsCount.valid();
+	}
+	
+	
+	//spec boolean validRequestsCountForTargetConfigurationSpec(RequestsCount requestsCount, int targetSize){
+	//	return true &&
+	//		thesholdBasedPolicy.validRequestsCountForTargetConfiguration(requestsCount, targetSize);
+	//}
+	
+    /**
+     * Main Constructor
+     */
+    public AutoScalerPolicyMock(
+    	int lowerBound,
+    	int upperBound,
+    	int minSize,
+    	int maxSize,
+    	int initialSize) {
+	
+		this.minSize = minSize;
+		this.maxSize = maxSize;
+		this.size = initialSize;
+		
+		thesholdBasedPolicy = new ThesholdBasedPolicy(lowerBound, upperBound);
+	}
+    
+    
+    public String toString() {
+    	return ""+ 
+    		"Size " 	+ this.size 		+ "\n" +
+    		"MinSize " 	+ this.minSize 		+ "\n" +
+    		"MaxSize " 	+ this.maxSize 		+ "\n" +
+    		"Threshold Policy " + this.thesholdBasedPolicy 	+ "\n";
+    }
+    
+    public int getSize(){
+		return this.size;
+	}
+    
+    	
+	public void scaleUp()
+		modifies fields AutoScalerPolicyMock:size
+		ensures
+			( (this.old.size < this.maxSize) ==> this.old.size < this.size ) &&
+			validConfiguration() { }
+	
+	public void scaleDown()
+		modifies fields AutoScalerPolicyMock:size
+		ensures
+			( (this.old.size != this.minSize) ==> this.old.size > this.size) &&
+			validConfiguration() {	}
+    
+
+	/**
+ 	 * This specification allows testers to generate sensors data that will trigger scale up or
+ 	 * scale down of the Resizable object
+	 * managed by the AutoScalerPolicy. The specification allows also to generate sequences of
+	 * data that leave the system in the same
+	 * configuration as well.
+	 *
+	 * NOTE: we need "pure fresh" because we generate a completely new instance.
+	 * Otherwise the solver might try to reuse other instances leading to counter-intuitive results
+	 */
+	pure fresh public RequestsCount resize(int currentSize, int targetSize)
+		adds 1 RequestsCount
+		ensures
+			validRequestsCount(result) &&
+			( targetSize > currentSize ==> scalesUp(result, currentSize, targetSize) ) &&
+			( targetSize < currentSize ==> scalesDown(result, currentSize, targetSize) ) &&
+			( targetSize == currentSize ==> stays(result, currentSize, targetSize) )
+	{
+		return null;
+	}
+	
+	/**
+	 * Same as before but with implicit this.size as current size, and targetSize as next one (assuming MAX is not reached !)
+	 */
+	public int resize(int targetSize)
+		modifies fields AutoScalerPolicyMock:size
+		ensures
+			boundedResizeTo(targetSize)
+	{
+		 return toMetricSensorValue(forceResize(targetSize));
+	}
+	
+	public double resizeDouble(int targetSize)
+		//modifies fields AutoScalerPolicyMock:size
+		ensures boundedResizeTo(targetSize) // -> This one perform the actual resize
+	{
+		 double rrresult =  toDoubleoMetricSensorValue(forceResize(targetSize));
+		 boundedResizeTo(targetSize);
+		 return rrresult;
+	}
+	
+	// TODO This conversion failes the whole damn stuff ! But we cannot use ceil nor floor !
+	// When one should round up e when down ?
+	// 
+	public int toMetricSensorValue(RequestsCount requestsCount){
+		int sensor = (this.size > 0) ? requestsCount.requests /this.size : requestsCount.requests; 
+		System.out.println("toMetricSensorValue " + requestsCount + " " + this.size + " --> " + sensor );
+		return sensor;
+	}
+	
+	public double toDoubleoMetricSensorValue(RequestsCount requestsCount){
+		double sensor = (this.size > 0) ? ((double) requestsCount.requests ) /this.size : (double) requestsCount.requests; 
+		System.out.println("toMetricSensorValue " + requestsCount + " " + this.size + " --> " + sensor );
+		return sensor;
+	}
+	
+	spec boolean boundedResizeTo(int targetSize)
+	{
+		return true &&
+			(this.old.size != targetSize ) ==> this.size == targetSize &&
+			// Boundary conditions -> should they be moved elsewher maybe ?
+			( ( targetSize > this.maxSize ) ==> this.size == this.maxSize ) &&
+			( ( targetSize < this.minSize ) ==> this.size == this.minSize );
+	}
+	
+
+	/**
+	 * Cannot use "modifies fields AutoScalerPolicyMock:size" here otherwise it will result
+	 * in UNSAT (but the same conditions split is different places does, so i suspect a
+	 * limit in the universe more than a logical error )
+	 */
+	pure fresh public RequestsCount forceResize(int targetSize)
+		adds 1 RequestsCount
+		ensures
+			validRequestsCount(result) &&
+			( targetSize > this.size ==> scalesUp(result, this.size, targetSize) ) &&
+			( targetSize < this.size ==> scalesDown(result, this.size, targetSize) ) &&
+			this.thesholdBasedPolicy.validRequestsCountForTargetConfiguration(result, this.size, targetSize)
+	{
+		return null;
+	}
+			
+	
+	spec boolean scalesUp(RequestsCount requestsCount, int currentSize, int targetSize){
+		return true &&
+			thesholdBasedPolicy.scalesUp(requestsCount, currentSize, targetSize);
+	}
+	
+	spec boolean scalesDown(RequestsCount requestsCount, int currentSize, int targetSize){
+		return true &&
+			thesholdBasedPolicy.scalesDown(requestsCount, currentSize, targetSize);
+	}
+	
+	spec boolean stays(RequestsCount requestsCount, int currentSize, int targetSize){
+		return true &&
+			thesholdBasedPolicy.validRequestsCountForTargetConfiguration(requestsCount, currentSize, targetSize);
+	}
+	
+	
+    
+}

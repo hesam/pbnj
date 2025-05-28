@@ -1,0 +1,18 @@
+package at.ac.testing.mocks;
+
+public class SensorReading 
+	ensures valid(){
+	
+	// Note that we can use Integer and force requests != null 
+	spec public int value;
+
+	spec public boolean valid() {
+		return value >= 0 && value < 10;
+	}
+	public String toString() {
+		return "Sensor Value: " + value;
+    }
+	 public static void main(String[] args){
+	System.out.println( " Sample " + new SensorReading() );
+	}
+}

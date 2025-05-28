@@ -1,0 +1,47 @@
+import polyglot.ext.pbnj.primitives.*;
+
+public class Test {   
+    
+    spec int multiplier;
+
+    public void resize1(int currentSize, int targetSize){
+  	System.out.println(" validMultipliers " + validMultipliers(currentSize, targetSize) );
+	updateMultiplierH(currentSize, targetSize);
+    }
+
+    public void resize2(int currentSize, int targetSize){
+  	System.out.println(" validMultipliers " + validMultipliers(currentSize, targetSize) );
+	this.multiplier = getBiggestValidMultiplier(currentSize, targetSize);
+    }
+    
+    // Return all the possible valid values
+    spec PBJInternSet<Integer> validMultipliers(int currentSize, int targetSize){
+	return { all int value : 0 .. 100 | value < 20 };
+    }
+
+    // Pick the biggest value of to the many possible ones
+    spec int getBiggestValidMultiplier(int currentSize, int targetSize){
+	PBJInternSet<Integer> valids = validMultipliers(currentSize, targetSize);
+   	return { some int m : valids | 
+		(no int mm : valids | 
+		 ( m != mm && mm > m ) ) };
+    }
+
+    // Update the value of the multiplier field by taking the biggest one
+    void updateMultiplierH(int currentSize, int targetSize)
+   	modifies fields Test:multiplier
+   	ensures getBiggestValidMultiplier(currentSize, targetSize) == this.multiplier
+    {	}
+
+    public String toString() { return "multiplier: " + this.multiplier; }
+
+    public static void main(String[] args) {	
+	Test t = new Test();
+	System.out.println(t);
+	t.resize1(7,8);
+	//t.resize2(7,8);
+	System.out.println(t);
+    }
+
+}
+

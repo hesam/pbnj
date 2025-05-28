@@ -1,0 +1,61 @@
+package pbnj.examples.primitives;
+
+import java.util.HashMap;
+
+public final primitive class PBJString
+    implements java.io.Serializable
+{
+    /** The value is used for character storage. */
+    private final String value;
+    spec private int length;
+    public String value() { return value; }
+
+    spec public int length() { return this.length; }
+
+    private static HashMap<Integer,PBJString> instances = new HashMap<Integer,PBJString>();
+
+    public static PBJString get(String original) {
+	int h = original.hashCode();
+	if (instances.containsKey(h))
+	    return instances.get(h);
+	return new PBJString(original);
+    }
+
+    public PBJString() {
+	this.value = null;
+    }
+
+    public static PBJString[] getAll(String[] originals) {
+	int s = originals.length;
+	PBJString[] res = new PBJString[s];
+	for (int i = 0; i < s; i++)
+	    res[i] = PBJString.get(originals[i]);
+	return res;
+    }
+
+    /**
+     * Initializes a newly created <code>String</code> object so that it
+     * represents the same sequence of characters as the argument; in other
+     * words, the newly created string is a copy of the argument string. Unless 
+     * an explicit copy of <code>original</code> is needed, use of this 
+     * constructor is unnecessary since Strings are immutable. 
+     *
+     * @param   original   a <code>String</code>.
+     */
+    public PBJString(String original) {
+	this.value = original;
+	this.length = original.length();
+	int h = original.hashCode();
+	if (!instances.containsKey(h))
+	    instances.put(h, this);
+    }
+
+
+    public int hashCode() {
+	return value.hashCode();
+    }
+
+    public String toString() {
+	return value.toString();
+    }
+}

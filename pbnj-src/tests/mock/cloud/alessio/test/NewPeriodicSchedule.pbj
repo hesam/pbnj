@@ -1,0 +1,208 @@
+package at.ac.testing.pbnj.test6;
+
+import polyglot.ext.pbnj.tologic.*;
+import polyglot.ext.pbnj.primitives.*;
+
+import pbnj.util.ArrayList;
+import java.util.Arrays;
+
+/*
+ * This is a subset of the original file. I left only the relevant, and used predicates
+ */
+public class NewPeriodicSchedule { 
+	
+	// Frame conditions for the proof of concept
+	spec public int MAX_SIZE = 10; // Note that it becomes quickly hard to solve !! 
+
+	// The Representation of the Schedule
+	// public is for DEBUG
+	spec public int size;
+	spec public int duration;
+	spec public TimedAction[] actions; // NOTE: Arrays of Objects seem to be Problematic somehow ! Expecially in SubClasses
+	
+	spec public TimedAction[] inputActions; // TEMP VAR - Public for better testability
+	spec int[] TEMP_VAR; // State vars to implement ordering ?
+	spec Interval[] intervals;
+	
+	// Configuration Variables to enable the combination of conditions
+	spec public int minDuration = -1;
+	spec public int maxDuration = -1;
+	
+	spec public boolean forceConcurrentActions = false;
+	spec public boolean avoidConcurrentActions = false;
+	
+	spec public boolean forceSustainedActions = false;
+	spec public boolean avoidSustainedActions = false;
+	
+	spec public boolean forceBlips = false;
+	spec public boolean avoidBlips = false;
+	
+	spec public boolean forceStateConsistency = false;
+	
+	// Impose a minimum amount of variability in the scenarios - UNSAT Right now !
+	spec public boolean forceVariability = false;
+
+
+	// Those should go in the SubClass but cannot be done right now	
+	// Brooklyn AutoScaler Specific configurations
+	spec int stabilityPeriodUp;
+	spec int stabilityPeriodDown;
+	spec int controlPeriod;
+	
+	spec int actuationDelay; // TODO --> MUST BE MOVED INTO THE INTEGRATION PART ?
+	
+	spec int monitoringPeriod; // We start from zero, but the first emit comes at least @ 1 !
+	
+	
+	// DEBUG
+	
+	// Time Ordering -- TODO Make this parametric in the input !!
+	spec boolean timeOrdering(){
+		return
+			// The time == 0 is not valid because by design data are published at the END of each monitoring period
+			actions[ 0 ].time > 0
+			&&
+			all int i : 0 .. size - 2 |
+				// Was this '<' to prevent truly concurrent actions ?
+				// Note that the = allows for monitoringPeriod > controlPeriod, and for that is the only option
+				// to generate concurrent actions within the same control and monitoring period
+				( all int j : 0 .. size - 1 | ( i < j ==> actions[i].time <= actions[j].time ) ) 
+		;
+	}
+	
+	public NewPeriodicSchedule(int monitoringPeriod,
+	int stabilityPeriodUp, int stabilityPeriodDown, int controlPeriod, int actuationDelay){
+		this.monitoringPeriod = monitoringPeriod;
+		this.stabilityPeriodUp = stabilityPeriodUp;
+		this.stabilityPeriodDown = stabilityPeriodDown;
+		this.controlPeriod = controlPeriod;
+		this.actuationDelay = actuationDelay;
+	}
+	
+	private String prettyPrint(TimedAction[] theActions){
+		String output = "\n";
+		output = output + "\tTime : Action     \t [Sta --> End]\t (HashCode)\n";
+		for( int i = 0; i < theActions.length; i ++ ){
+			output = output + "\t" + theActions[ i ].toString() + "\n";	
+		}
+		return output;
+	}
+    
+ 	
+	public void printTriggerActions()
+	{
+		findTheIntervals();
+		while( this.intervals.length > 0 ){
+			findNextTrigger();
+		}
+	}
+    
+    // TODO : This fails with a NPE !
+	public void findTheIntervals()
+ 		modifies fields NewPeriodicSchedule:intervals
+ 		adds this.actions.length Interval
+ 		ensures
+ 			this.intervals != null
+ 			&&
+ 			findIntervals()
+ 			&&
+ 			orderedIntervals()
+ 	{	}
+ 	
+ 	spec boolean findIntervals(){
+		return
+			all TimedAction a : this.actions |
+			(
+				a.type != ActionType.STAY ==>
+					one Interval i : this.intervals |
+					(
+						a == i.start &&
+						( 
+							a.type == ActionType.SCALE_UP && i.intervalDuration == stabilityPeriodUp
+							||
+							a.type == ActionType.SCALE_DOWN && i.intervalDuration == stabilityPeriodDown 
+						)
+						&&
+						noSameStart( i )
+					)
+			) 
+			&&
+			all Interval ii : this.intervals | ( 
+				ii != null )
+			&&
+			all int iii : 0 ..  this.intervals.length - 1 | (
+				all int j : 0 ..  this.intervals.length - 1 |
+					( iii != j ==> this.intervals[ iii ] != this.intervals[ j ] )
+				)
+		;
+	}    
+	
+	spec boolean noSameStart( Interval i ){
+		return 
+			no Interval ii : this.intervals | ( i != ii && i.start == ii.start )
+		;
+	}
+	
+	spec boolean orderedIntervals(){
+		return
+		this.intervals.length > 1 ==>
+			all int i : 0 .. this.intervals.length - 1 | (
+				all int j : 0 .. this.intervals.length - 1 | (
+				( i < j ) ==> this.intervals[ i ].start.time <= this.intervals[ j ].start.time
+ 			) )
+		;
+	}
+	
+    void findNextTrigger()
+ 		modifies fields NewPeriodicSchedule:intervals
+ 		ensures
+ 			// Always remove one element - This should eventually goes to this.intervals.length == 0 !
+			this.intervals.length == this.old.intervals.length - 1 
+			&&
+			// Whenever there are at least 2 elements, they must be different
+			this.intervals.length > 1 ==>
+				all int i : 0 .. this.intervals.length - 1 |
+				(
+					all int j : 0 .. this.intervals.length - 1 | 
+					(
+						i != j ==> this.intervals[ i ] != this.intervals[ j ] 
+					)
+				)
+			&&
+			// Avoid null values unless the array is empty
+			this.intervals.length > 0 ==> 
+			(
+				all Interval interval : this.intervals | (interval != null ) 
+			)
+			
+	{	}
+
+	public void updateTypes()
+		modifies fields TimedAction:type
+		ensures
+			all TimedAction t : this.inputActions | t.validType()
+	{	}
+	
+	
+ 	// UTILS
+	public String toString() {
+		return	"Schedule : \n" +
+				"\tSize " + size + " (" + MAX_SIZE + ")\n" +
+				"\tDuration " + duration + "\n" +
+				"\tMonitoringPeriod " + monitoringPeriod + "\n" +
+				"\tControlPeriod " + controlPeriod + "\n" +
+				"\tStabilityPeriod Up/Down " + stabilityPeriodUp + "/" + stabilityPeriodDown + "\n" + 
+				( ( inputActions != null ) ? "\tInputs " + Arrays.toString( inputActions ) + "\n" : "" ) +
+				( ( TEMP_VAR != null ) ? "\tSTATE VAR " + Arrays.toString( TEMP_VAR ) + "\n" : "" ) +
+				"\tElements: \n" + ( ( actions != null ) ? prettyPrint( actions ) + "\n" : "null\n") + 
+				"\t CONFIGURATION : \n" +
+				"\t\t Min/Max duration " + 	this.minDuration + "/" + this.maxDuration + "\n" +
+				"\t\t force/avoid concurrency " +	this.forceConcurrentActions + "/" +	this.avoidConcurrentActions + "\n" +
+				"\t\t force/avoid sustained actions " + 	this.forceSustainedActions + "/" + this.avoidSustainedActions + "\n" +
+				"\t\t force/avoid blips " + this.forceBlips + "/" + this.avoidBlips + "\n" +
+				"\t\t force state consistency " + this.forceStateConsistency + "\n" +
+				"Potentially Unstable Intervals: \n" + ( ( this.intervals != null ) ? Arrays.toString( this.intervals ) + "\n" : "none/null\n")
+		;
+    }
+ 
+}

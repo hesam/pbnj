@@ -1,0 +1,481 @@
+package at.ac.testing.pbnj.test10;
+
+//import at.ac.testing.mocks.*;
+import polyglot.ext.pbnj.tologic.*;
+import polyglot.ext.pbnj.primitives.*;
+
+//import org.testng.SkipException;
+
+/**
+* This spec says that for the scale up it's sufficient to have a value > current UB. To scale right to a given target conf the value should also be 
+* value < target UB. This means that the final value might be value < target * LB. When this happens we have a reshourceThrashing situation because
+* At the same time both scaleUp(current) and scaleDown(target) are enabled.
+*
+* Similarly for a scale down it is enough value < current LB and value > target LB.
+* This might allow for value > target UB, that leads to resourceThrashing because scaleDown(current) and scaleUp(target) are enabled at the same time.
+*
+* Resource thrashing is possible only when the boundaries of subsequent configurations are non-overlapping, which means that
+* for any configuration c, c2 Exists LB and UB such that c*UB < c*LB and LB<=UB and c2 = c+1
+*
+* Nevertheless, when we are asked to produce a value to scale up and scale down we must return something which is either
+* fullyContainted or resourceThrashing. Then is up to the implementation of the policy to avoid resource thrashing.
+* 
+* This is simply because THIS spec is about the load not about the autoscaling !
+*/
+
+// TODO other methods that might be useful:
+// Min Resize, Max Resize -> get the min and max values to cause a resize
+// TODO Possibly extends for integrating with the specific app and combine the values with descriptors to generate "brooklyn SENSOR" values -> This show the integration part that should be easy (no need to change the code of the test "too much") 
+
+public class ThresholdBasedPolicy
+	ensures valid(){
+
+    spec int roundup;
+	spec int lowerBound;
+	spec int upperBound;
+    
+	spec int multiplier; // Transient value
+
+	spec public int MAX_INT = 256; // Frame Condition with 8 bits 2^8 / 2 - 1 
+	
+	spec boolean valid(){
+		return true &&
+			this.lowerBound >= 0 &&
+			this.upperBound >= this.lowerBound
+			//&&
+			//this.multiplier > 0 
+		;
+	}
+
+	public ThresholdBasedPolicy(int lowerBound, int upperBound) {
+		this.lowerBound = lowerBound;
+		this.upperBound = upperBound;
+	}
+
+	public String toString() {
+    	return "Policy: \n"+ 
+    		"Lower Bound " 	+ this.lowerBound  		+ "\n" +
+    		"Upper Bound " 	+ this.upperBound  		+ "\n" +
+	    "roundup " + this.roundup + "\n" +
+    	"";
+    }
+    
+    // Compute a valid multiplier value 
+    			// Allows at least 1 value in all the possible ranges
+    			// Must be a MDC ?
+    			// upperBound - lowerBound / maxSize >= 1;
+    			// Absolute value ?
+    
+    spec int abs(int i) { return i < 0 ? -i : i; }
+    
+    spec int max(int i, int j) { return i >= j ? i : j; }
+    
+    spec PBJInternSet<Integer> getCommonDivisors(int a, int b){
+    	return 
+    		{ all int gcd : 1 .. max(a, b) | (
+    			a / gcd * gcd == a &&
+    			b / gcd * gcd == b 
+    		)
+    	};
+    }
+    
+    public SensorReading resize(int currentSize, int targetSize){
+    	// DEBUG
+    	// System.out.println(" COMMON DIVISOR  	" + getCommonDivisors(this.lowerBound, this.upperBound) );
+    	// Note that divisors are on bounds, multipliers are for size !
+    	// System.out.println(" VALID MULTIPLIERS  " + validMultipliers(currentSize, targetSize) );
+    	// System.out.println(" BIGGEST MULTIPLIERS  " + getBiggestValidMultiplier(currentSize, targetSize) );
+    	
+    	try{
+   			updateMultiplierH(currentSize, targetSize);
+   		} catch(Throwable e){
+   			e.printStackTrace();
+   			if( e.getMessage() != null && e.getMessage().contains("UNSAT") ){
+			    //throw new Exception("Missing Precondition: There is not valid integer value to trigger the specified transition!");
+   				System.out.println("Missing Precondition: There is not valid integer value to trigger the specified transition!");
+				int z = 1/0;
+   				}
+   		} 
+   		// this.multiplier = getBiggestValidMultiplier(currentSize, targetSize);
+    	System.out.println(" THE MULTIPLIER " + this.multiplier );
+    	
+    	return resizeH(currentSize, targetSize);
+    }
+    
+    
+    spec PBJInternSet<Integer> validMultipliers(int currentSize, int targetSize){
+    	return
+    	{
+   			all int cd : getCommonDivisors(lowerBound, upperBound) | (
+   				// Scale DOWN - Must guarantee at least one possible integer value !
+   				// If this cannot be found, then there is no way to resize. We can show that if this condition is not met
+   				// the there will be an UNSAT also later, while trying to get the sensor value
+   				currentSize > targetSize &&
+					roundUp( this.lowerBound / cd * (targetSize + 1 ) , currentSize ) != roundUp( this.lowerBound / cd * targetSize , currentSize )
+   				|| 
+   				// Scale UP
+   				currentSize < targetSize &&
+   				(
+   					currentSize > 0 && this.lowerBound / cd * ( targetSize + 1) / currentSize  < this.MAX_INT
+   				 	||
+   				 	currentSize == 0 &&	this.lowerBound / cd * ( targetSize + 1) < this.MAX_INT
+   				 )
+   				||
+   				currentSize == targetSize 
+   			)
+		};
+    }
+
+    spec int getBiggestValidMultiplier(int currentSize, int targetSize){
+    	return
+    	{
+    		some int m : validMultipliers(currentSize, targetSize) | (
+    			no int mm : validMultipliers(currentSize, targetSize) | ( 
+    				( m != mm && mm > m )
+    		) )
+    	};
+    }
+    
+    void updateMultiplierH(int currentSize, int targetSize)
+    	modifies fields ThresholdBasedPolicy:multiplier
+    	ensures
+   			getBiggestValidMultiplier(currentSize, targetSize) == this.multiplier
+    {	}
+    
+    // Apparenlty this one is not limited by the Int bit width
+    spec PBJInternSet<Integer> getAllResize(int currentSize, int targetSize){
+    	return {
+    		all int value : 0 .. MAX_INT | (
+    			targetSize > currentSize && scalesUpTest(value, currentSize, targetSize) 
+    			||
+				targetSize < currentSize && scalesDownTest(value, currentSize, targetSize)
+				||
+				targetSize == currentSize && staysTest(value, currentSize, targetSize )
+    		)
+    	};
+    }
+    
+    spec int getTheResize(int currentSize, int targetSize){
+    	return {
+    		some int value : 0 .. MAX_INT | (
+    			targetSize > currentSize && scalesUpTest(value, currentSize, targetSize) 
+    			||
+				targetSize < currentSize && scalesDownTest(value, currentSize, targetSize)
+				||
+				targetSize == currentSize && staysTest(value, currentSize, targetSize )
+    		)
+    	};
+    }
+    
+    spec public boolean scalesUpTest(	int value,
+    									int currentSize, int targetSize){
+    									
+    	int scaledUpperBound = this.upperBound / this.multiplier;
+		int scaledLowerBound = this.lowerBound / this.multiplier;
+		return 
+			( currentSize > 0 &&
+				value > scaledUpperBound  && // Trigger Scale up   
+				value <= ( (scaledUpperBound * targetSize) / currentSize ) &&
+				scaledUpperBound  * targetSize < ( targetSize + 1 ) * scaledLowerBound  ==> 
+					value < ( ( targetSize + 1) * scaledLowerBound  ) / currentSize && 
+				scaledUpperBound  * targetSize >= ( targetSize + 1 )  * scaledLowerBound  ==>
+					value > (scaledUpperBound  * ( targetSize - 1) ) /  currentSize 
+			)
+			||
+			( currentSize == 0 &&
+				value > 0 && // Trigger Scale up
+				value  <= scaledUpperBound * targetSize &&
+				scaledUpperBound  * targetSize < ( targetSize + 1 ) * scaledLowerBound  ==>
+					value < ( targetSize + 1) * scaledLowerBound  && 
+				scaledUpperBound  * targetSize >= ( targetSize + 1 )  * scaledLowerBound  ==>
+					value > scaledUpperBound  * ( targetSize - 1)
+			)
+		;
+	}
+	
+    
+    spec public boolean scalesDownTest(
+    					int value,
+    					int currentSize, int targetSize){
+		int nextBiggerSize 	= targetSize + 1;
+		int nextSmaller		= targetSize - 1;
+		int scaledUpperBound = this.upperBound / this.multiplier;
+		int scaledLowerBound = this.lowerBound / this.multiplier;
+		
+		return
+			// Trigger the scale down from current configuration - This is the only one that must ALWAYS be present
+			value < scaledLowerBound   &&
+
+			// Boundary conditions for targetSize - 1 which is the biggest conf smaller than the target one -> resource thrashing
+			(
+				scaledUpperBound >= scaledLowerBound * targetSize / nextSmaller
+				&&
+				// Must be either a "pure" integer or the one above (to have the >= )				 
+				value >= roundUp(scaledLowerBound * targetSize, currentSize ) 
+				||
+				scaledUpperBound  < scaledLowerBound * targetSize / nextSmaller
+				&& 
+				currentSize  >= (scaledUpperBound * nextSmaller ) / value
+				&&
+				currentSize  > (scaledLowerBound * nextSmaller ) / value// This is to avoid the case 0 where LB==UB==0 in such a case the value X=0 is fine but causes to scale to 0 !
+			)
+			&&
+			(
+				this.lowerBound  <= this.upperBound * targetSize / nextBiggerSize ==> 
+					value <  roundUp( nextBiggerSize * scaledLowerBound, currentSize ) // nextBiggerSize * scaledLowerBound  / currentSize  
+				&&
+				this.lowerBound  > this.upperBound * targetSize / nextBiggerSize  ==> 
+					value <= scaledUpperBound   /  currentSize * targetSize
+			)
+		;
+	}
+    
+	spec public boolean staysTest(	int value,
+									int currentSize, int targetSize){
+		int scaledUpperBound = this.upperBound / this.multiplier;
+		int scaledLowerBound = this.lowerBound / this.multiplier;
+		
+		return
+			( currentSize > 0 &&
+				value <= ( scaledUpperBound * currentSize) / currentSize
+				&&
+				// For non Overlapping  - Resource Thrashing
+				( currentSize - 1) * scaledUpperBound <= currentSize * scaledLowerBound ==>  value > ( ( currentSize - 1) * scaledUpperBound ) / currentSize &&
+				// For Overlapping 
+				( currentSize - 1) * scaledUpperBound > currentSize * scaledLowerBound  ==>  value >= ( scaledLowerBound  * currentSize ) / currentSize  
+			) 
+			||
+			// Default condition
+			( currentSize == 0 &&
+				value == 0
+			) 
+		; 
+	}
+    
+    
+    
+    fresh public SensorReading resizeH(int currentSize, int targetSize)
+	modifies fields ThresholdBasedPolicy:roundup
+    	adds 1 SensorReading
+    	ensures
+    		result != null &&
+    		result.multiplier == this.multiplier &&
+	this.roundup == roundUp( (this.lowerBound / this.multiplier  * targetSize ), currentSize ) &&
+    		// This works with 10 bit-width
+	targetSize < currentSize && scalesDownTest(result.value, currentSize, targetSize)	
+    /*
+    		some int value : 0 .. this.MAX_INT | (
+    			result.value == value &&
+    			(
+			 //targetSize > currentSize && scalesUpTest(value, currentSize, targetSize) 
+			 //||
+					targetSize < currentSize && scalesDownTest(value, currentSize, targetSize)
+					//||
+					//targetSize == currentSize && staysTest(value, currentSize, targetSize )
+				)
+			)
+    */
+    		// This do not work. It picks a value that is not among the ones that can be computed with the VERY SAME conditions !!
+    		//(
+    		//	targetSize > currentSize && scalesUpTest(result.value, currentSize, targetSize) 
+    		//	||
+			//	targetSize < currentSize && scalesDownTest(result.value, currentSize, targetSize)
+			//	||
+			//	targetSize == currentSize && staysTest(result.value, currentSize, targetSize )
+			//)
+    		//( targetSize > currentSize ==> scalesUp(result, currentSize, targetSize) ) &&
+			//( targetSize < currentSize ==> scalesDown(result, currentSize, targetSize) ) &&
+			//( targetSize == currentSize ==> stays(result, currentSize, targetSize ) )
+    {
+    	// DEBUG
+    	
+    	System.out.println( currentSize + " --> " + targetSize + " with multiplier " + this.multiplier + " and MAX_INT "+ MAX_INT);
+    	if( currentSize > targetSize )
+    	{
+			// Scale Down Conditions
+			System.out.println( "Trigger the scale down Must be < " + this.lowerBound / this.multiplier  );
+
+			if(	this.upperBound / this.multiplier  * ( targetSize - 1 ) >= this.lowerBound / this.multiplier * targetSize ){
+				
+				// The boundary is an integer number 
+				//if( (this.lowerBound / this.multiplier  * targetSize ) % currentSize ==  0 ){
+				//	System.out.println( " (Overlapping - below - Integer)  >= " + (this.lowerBound / this.multiplier  * targetSize ) /  currentSize );
+				//} else {
+					System.out.println( " (Overlapping - below - Rounded)  >= " + roundUp( (this.lowerBound / this.multiplier  * targetSize ), currentSize ) );
+				//}
+			} else{
+				System.out.println( "(Not Overlapping - below ) Must be   >= " + (this.upperBound / this.multiplier * ( targetSize - 1 ) ) / currentSize );
+				System.out.println( "(Not Overlapping - below ) Must be   > " + (this.lowerBound / this.multiplier * ( targetSize - 1 ) ) / currentSize );
+				
+				System.out.println( "(Not Overlapping - below ) Must be   >= " + ( (double) this.upperBound ) * ( (double) targetSize - 1 ) / ( (double) currentSize ) );
+				System.out.println( "(Not Overlapping - below ) Must be   > " + (this.lowerBound * ( targetSize - 1 ) ) / currentSize );
+			}
+		
+			if( this.lowerBound * ( targetSize + 1 ) <= this.upperBound * targetSize){
+				System.out.println( " (Overlapping - above) Must be   < " + roundUp( this.lowerBound / this.multiplier * ( targetSize + 1 ) ,  currentSize )  ) ;
+				System.out.println( " (Overlapping - above) Must be   < " + ( (double) this.lowerBound ) / ((double) this.multiplier ) * ( ((double)targetSize ) + 1 ) / ( (double) currentSize ) );
+			} else {
+				System.out.println( " (Not Overlapping - above) Must be   <= " + this.upperBound / this.multiplier * targetSize / currentSize );
+			}
+			
+		} else if (currentSize < targetSize )
+		{
+			// Scale Up Conditions
+			if( currentSize > 0 ) {
+				System.out.println( "Trigger the scale up Must be > " + this.upperBound / this.multiplier  );
+				System.out.println( "(Ideally)		: To stay inside the target conf Must be <= " + (this.upperBound / this.multiplier * targetSize) / currentSize );
+				if( this.upperBound / this.multiplier  * targetSize < this.lowerBound / this.multiplier * ( targetSize + 1 ) ){
+					System.out.println( "(Non-Overlapping)	: To stay inside the target conf Must be < " + ( this.lowerBound / this.multiplier * ( targetSize + 1) ) / currentSize );				
+				}
+				else {
+					System.out.println( "(Overlapping)		: To stay inside the target conf Must be > " +  (this.upperBound / this.multiplier  * ( targetSize - 1) ) /  currentSize );
+				} 
+			} else {
+				System.out.println( "Trigger the scale up Must be > " + 0 );
+				System.out.println( "(Ideally)		: To stay inside the target conf Must be <= " + this.upperBound / this.multiplier * targetSize );
+				if( this.upperBound / this.multiplier  * targetSize < this.lowerBound / this.multiplier * ( targetSize + 1 ) ){
+					System.out.println( "(Non-Overlapping)	: To stay inside the target conf Must be < " + this.lowerBound / this.multiplier *  ( targetSize + 1 ) );				
+				}
+				else {
+					System.out.println( "(Overlapping)		: To stay inside the target conf Must be > " +  this.upperBound / this.multiplier  * ( targetSize - 1 ));
+				}
+			}	
+		}
+		else{}
+		System.out.println( " All possible resize values	" + getAllResize(currentSize, targetSize) );
+		System.out.println( " One possible resize value		" + getTheResize(currentSize, targetSize) );
+		
+    	return null;
+    }
+
+	// To scale down one must: 
+	//	- go below the lower bound
+	// To reach a target configuration the conditions (X >= LB && X <= UB) are NECESSARY BUT NOT SUFFICIENT ! in fact for overlapping configurations we may have that at the same time these conditions
+	// are TRUE for more than 1 configuration !!! For example with LB=1, UB=7 scaling from S>7 to 1 would have [1,7] but he interval [1,7] would enable 7 configurations at the same time !!     
+	/*
+		spec public boolean scalesDown(SensorReading sensorReading, int currentSize, int targetSize){
+		int nextBiggerSize 	= targetSize + 1;
+		int nextSmaller		= targetSize - 1;
+		int scaledUpperBound = this.upperBound / this.multiplier;
+		int scaledLowerBound = this.lowerBound / this.multiplier;
+		
+		return
+			// Trigger the scale down from current configuration - This is the only one that must ALWAYS be present
+			sensorReading.value < scaledLowerBound   &&
+
+			// Boundary conditions for targetSize - 1 which is the biggest conf smaller than the target one -> resource thrashing
+			(
+				// If we are in overlapping (included the boundary, we are ok)
+				// This is not computed right !!! It says it is false but 50*18 >= 10 * 19 !!
+				// 50 / 10 >= 19 / 18
+				
+				scaledUpperBound * nextSmaller >= scaledLowerBound * targetSize
+				&& 
+				sensorReading.value >= roundUp( scaledLowerBound * targetSize , currentSize )  // TODO Before was >=, we need to distinguish about the cases !
+					
+				||
+				
+				// But if we are in an non-overlapping situation the lower bound should be relaxed
+				scaledUpperBound * nextSmaller < scaledLowerBound * targetSize 
+				&& 
+				sensorReading.value >= (scaledUpperBound * nextSmaller ) / currentSize
+				&&
+				sensorReading.value > (scaledLowerBound * nextSmaller ) / currentSize // This is to avoid the case 0 where LB==UB==0 in such a case the value X=0 is fine but causes to scale to 0 !
+			)
+			&&
+			// Boundary conditions for targetSize + 1 which is the smallest conf bigger than the target one -> overlapping situation
+			(
+				// If we are overlapping (included the boundary, we need to squeeze even more
+				this.lowerBound * nextBiggerSize  <= this.upperBound * targetSize ==> 
+					sensorReading.value <  roundUp( nextBiggerSize * scaledLowerBound, currentSize ) // nextBiggerSize * scaledLowerBound  / currentSize  
+				&&
+				// But if we are non-overlapping its ok
+				this.lowerBound * nextBiggerSize  > this.upperBound * targetSize ==> 
+					sensorReading.value <= scaledUpperBound   /  currentSize * targetSize
+			)
+		;
+	} 
+	
+	*/
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
+	spec int roundUp( int nom, int den ){
+		return
+			( nom / den * den < nom ) ? ( nom / den ) + 1 : nom / den
+		;  
+	}	
+    
+    // Fully Contained
+	spec public boolean fullyContained(SensorReading sensorReading, int currentSize, int targetSize){
+		int scaledUpperBound = this.upperBound / this.multiplier;
+		int scaledLowerBound = this.lowerBound / this.multiplier;
+		return true && 
+			( sensorReading.value * currentSize >= scaledLowerBound  * targetSize) &&
+			( sensorReading.value * currentSize <= scaledUpperBound  * targetSize)
+		; 
+	}
+
+	// NOTE: When currentSize == 0 this will always fail (we could avoid the division by multipliing here and there but that makes the formulae UNSAT beacuse of the finite
+	// World assumption !
+	// So we need to split the conditions
+    spec public boolean scalesUp(SensorReading sensorReading, int currentSize, int targetSize){
+    	int scaledUpperBound = this.upperBound / this.multiplier;
+		int scaledLowerBound = this.lowerBound / this.multiplier;
+		return 
+			( currentSize > 0 &&
+				sensorReading.value > scaledUpperBound  && // Trigger Scale up   
+				sensorReading.value <= ( (scaledUpperBound * targetSize) / currentSize ) &&
+				scaledUpperBound  * targetSize < ( targetSize + 1 ) * scaledLowerBound  ==> 
+					sensorReading.value < ( ( targetSize + 1) * scaledLowerBound  ) / currentSize && 
+				scaledUpperBound  * targetSize >= ( targetSize + 1 )  * scaledLowerBound  ==>
+					sensorReading.value > (scaledUpperBound  * ( targetSize - 1) ) /  currentSize 
+			)
+			||
+			( currentSize == 0 &&
+				sensorReading.value > 0 && // Trigger Scale up
+				sensorReading.value  <= scaledUpperBound * targetSize &&
+				scaledUpperBound  * targetSize < ( targetSize + 1 ) * scaledLowerBound  ==>
+					sensorReading.value < ( targetSize + 1) * scaledLowerBound  && 
+				scaledUpperBound  * targetSize >= ( targetSize + 1 )  * scaledLowerBound  ==>
+					sensorReading.value > scaledUpperBound  * ( targetSize - 1)
+			)
+		;
+	}
+			
+	
+	
+	// For the lower bound we must distinguish between overlapping and non-overlapping boundaries.
+	// Since stays in 0 is possible we need to split the condition also here !
+	// NOTE DO not use <==> otherwise both F will results in T that with || makes everything T !! Use &&
+	spec public boolean stays(SensorReading sensorReading, int currentSize, int targetSize){
+		int scaledUpperBound = this.upperBound / this.multiplier;
+		int scaledLowerBound = this.lowerBound / this.multiplier;
+		
+		return
+		( currentSize > 0 &&
+			sensorReading.value <= ( scaledUpperBound * currentSize) / currentSize
+			&&
+			// For non Overlapping  - Resource Thrashing
+			( currentSize - 1) * scaledUpperBound <= currentSize * scaledLowerBound ==>  sensorReading.value > ( ( currentSize - 1) * scaledUpperBound ) / currentSize &&
+			// For Overlapping 
+			( currentSize - 1) * scaledUpperBound > currentSize * scaledLowerBound  ==>  sensorReading.value >= ( scaledLowerBound  * currentSize ) / currentSize  
+		) 
+		||
+		( currentSize == 0 && sensorReading.value == 0 ) // Default condition
+		; 
+	}
+}

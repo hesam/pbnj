@@ -1,0 +1,30 @@
+//package java.awt;
+package pbnj.awt;
+
+//import java.awt.*;
+
+import polyglot.ext.pbnj.primitives.*;
+
+
+public class GridBagLayoutInfo implements java.io.Serializable {
+  spec Integer width, height;		/* number of cells horizontally, vertically */
+  //int startx, starty;		/* starting point for layout */ //HS
+  spec Integer startx, starty;		/* starting point for layout */ //HS
+  int minWidth[];		/* largest minWidth in each column */
+  int minHeight[];		/* largest minHeight in each row */
+  double weightX[];		/* largest weight in each column */
+  double weightY[];		/* largest weight in each row */
+
+    public Integer startx() { return this.startx; }
+    public Integer starty() { return this.starty; }
+    public void startx(Integer x) { this.startx = x; }
+    public void starty(Integer y) { this.starty = y; }
+
+    GridBagLayoutInfo (int gridCols, int gridRows) {
+      /* fix for 5055696 (avoiding AIOOBE by enlarging sizes) */
+	minWidth = new int[600]; //GridBagLayout.MAXGRIDSIZE]; //HS
+	minHeight = new int[400]; //GridBagLayout.MAXGRIDSIZE]; //HS
+      weightX = new double[600]; //GridBagLayout.MAXGRIDSIZE];
+      weightY = new double[400]; //GridBagLayout.MAXGRIDSIZE];
+  }
+}

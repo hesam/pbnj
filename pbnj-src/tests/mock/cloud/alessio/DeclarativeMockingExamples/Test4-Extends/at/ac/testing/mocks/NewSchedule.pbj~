@@ -1,0 +1,232 @@
+package at.ac.testing.mocks;
+
+import polyglot.ext.pbnj.tologic.*;
+import polyglot.ext.pbnj.primitives.*;
+import pbnj.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * A schedule is a sequence of TimedActions that forms a Scenario for testing when applied to a Policy Specification.
+ *	We provide also the int[][] version because it's more generic and can be used to specify concurrent sensor reading
+ */
+public class NewSchedule 
+	ensures classInvariant(){
+	
+	spec int MAX_SIZE = 10; // Frame condition for the proof of concept
+
+	spec int size;
+	spec public TimedAction[] actions;
+	
+	//spec int stabilityPeriodUp;
+	//spec int stabilityPeriodDown;
+	//spec int controlPeriod;
+	
+	// This value is ASSUMED for the cloud. For testing specific scenarios should be fine.
+	// Once can define a different actuation delay for each action if needed.
+	//spec int actuationDelay;
+		
+	public NewSchedule(){}
+	
+	// TODO This SHOULD accept a Policy as well
+	//public NewSchedule(int stabilityPeriodUp, int stabilityPeriodDown, int controlPeriod, int actuationDelay){
+	//	this.stabilityPeriodUp = stabilityPeriodUp;
+	//	this.stabilityPeriodDown = stabilityPeriodDown;
+	//	this.controlPeriod = controlPeriod;
+	//	//
+	//	this.actuationDelay = actuationDelay;
+	//}
+	
+	// Class Invariant - This MUST be true after each public method invocation !
+	spec public boolean classInvariant() {
+		return true &&
+			//stabilityPeriodUp >= 0 &&
+			//stabilityPeriodDown >= 0 &&
+			//controlPeriod >= 0
+			//&&
+			// NOTE that this not says the actions will be different objects !
+			all TimedAction action : actions | ( action != null && action.valid() ) 
+		;
+	}
+
+	// Why do we need to return something in the first place ?
+	public void init(){
+		// Note that we need this trick because initH needs an adds clause otherwise 'apparently' it cannot generate
+		// new "fresh" instances of TimedAction. For performance reason we limit the size to be less than a MAX_SIZE
+		positiveSizeH();
+		initH();
+	}
+	
+	void positiveSizeH()
+		modifies fields NewSchedule:size
+		ensures this.size > 0 && this.size <= this.MAX_SIZE
+	{
+	}
+	
+	void initH()
+		modifies fields NewSchedule:actions
+		adds this.size TimedAction // -- Not sure how to say N > 0 
+		ensures 
+			initSpec() &&
+			pureObjects()
+	{	}
+
+	spec boolean initSpec(){
+		return
+			validSchedule()
+		; 
+	}
+	
+	// TimedAction.time should be automatically set here !
+	public void init(TimedAction[] targetActions)
+	{
+		size = targetActions.length ; // Instead od positiveH
+		initH( targetActions );
+	}
+	
+	void initH( TimedAction[] targetActions )
+		modifies fields NewSchedule:actions
+		adds this.size TimedAction 
+		ensures
+			pureObjects( targetActions )
+			&&
+			preserveStateTransitions( targetActions )
+			&&
+			initSpec()
+		 {	}
+		 
+	// This is because otherwise it will try to use the original objects while we need just
+	// to "copy" their values. Maybe a final modified would work as well ?
+	spec boolean pureObjects(TimedAction[] targetActions){
+		return 
+			all TimedAction t1 : targetActions |
+				( all TimedAction t2 : actions | 
+					( t1 != t2 ) )
+		; 
+	}
+
+	spec boolean pureObjects(){
+		// THIS IS SAFER WHEN WE UPDATE THE INNER OBJECTS,
+		// OTHERWISE WE ARE GOING TO UNSAT IF INIT CREATES ONE
+		// SINGLE INSTANCE ! AL MUST BE DIFFERENT OBJECTS ?
+		return
+			// Must be enforced ? Can we have b < a ? all a : 0 .. size -2 | all b : a .. size - 1 ?!
+			all int a : 0 .. size - 1 |
+				( all int b : 0 .. size - 1 |
+					( a != b <==> actions[a] != actions[b] ) )  
+		; 
+	}
+
+	spec boolean preserveStateTransitions(TimedAction[] targetActions){
+		return
+			all TimedAction targetTA : targetActions | (
+				some TimedAction localTA : actions | ( 
+					localTA.startSize == targetTA.startSize && 
+					localTA.targetSize == targetTA.targetSize && 
+					( targetTA.time >=0 ==> localTA.time == targetTA.time )
+				)
+			)
+		;    
+	}
+	
+	public void withDuration(int duration)
+		modifies fields TimedAction:time
+		ensures
+			exactly(duration) &&
+			validSchedule()
+	{	}
+	
+	public void withMaxDuration(int maxDuration)
+		modifies fields TimedAction:time
+		ensures
+			atMost(maxDuration) &&
+			validSchedule()
+			
+	{	}
+	
+	public void withMinDuration(int minDuration)
+		modifies fields TimedAction:time
+		ensures
+			atLeast(minDuration) &&
+			validSchedule()
+	{	}
+	
+	public void withDurationInBetween(int minDuration, int maxDuration)
+		modifies fields TimedAction:time
+		ensures 
+			( minDuration < maxDuration && atLeast(minDuration) && atMost(maxDuration) )
+			||
+			( minDuration > maxDuration && atLeast(maxDuration) && atMost(minDuration) )
+			||
+			( minDuration < maxDuration && exactly(minDuration) )
+	{	}
+	
+	// A valid schedule is not null, and it contains at least 1 valid TimedAction
+	spec boolean validSchedule(){
+		return
+				// really ? why this is not guaranteed by the valid() class invariant ?
+				actions != null 
+			&&
+				// can be also <= size ? 
+				actions.length == size 
+			&&
+				// Elements must be ordered according to time
+				all int i : 0 .. size - 1 |
+					( all int j : 0 .. size - 1 | ( i <= j ==> actions[i].time <= actions[j].time ) ) 
+		;
+	}
+	
+	
+	spec boolean atMost( int maxDuration ){
+		return actions[ size - 1 ].time <= maxDuration;
+	}
+	
+	spec boolean atLeast( int minDuration ){
+		return actions[ size - 1 ].time >= minDuration;
+	}
+	
+	// This can be also composed by atMost and atLeast
+	spec boolean exactly( int duration ){
+		return actions[ size - 1 ].time == duration;
+	}
+	
+	
+	
+	public void doForceStateConsistency()
+		modifies fields
+			TimedAction:startSize,
+			TimedAction:endSize
+		ensures
+			this.actions.length > 1 ==> 
+				stateConsistency()
+			&&
+			all TimedAction t : this.actions | t.valid() // all elements >=0, and if both sizes > -1 then validType() (scale up when size start < size end, etc.)
+	{	}
+
+// This links a state to the next one by requiring that consecutive state transitions have matching initial and target states (or size)
+spec boolean stateConsistency(){
+	return
+		all int i : 0 .. this.actions.length - 1 |
+		(
+			( i == 0 ) ==>  
+				this.actions[ i ].targetSize == this.actions[ i + 1 ].startSize 
+			&&
+			( i > 0 && i < this.actions.length - 1 ) ==>
+				(
+					this.actions[ i ].startSize == this.actions[ i - 1 ].targetSize &&
+					this.actions[ i ].targetSize == this.actions[ i + 1 ].startSize
+				) 
+			&&
+			( i == this.actions.length - 1 ) ==>
+				this.actions[ i ].startSize == this.actions[ i - 1 ].targetSize
+		)
+		;
+	}
+	
+
+	// UTILS
+	public String toString() {
+		return 		"Schedule : " + Arrays.toString( actions ) + "\n";
+    }
+	
+}

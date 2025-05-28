@@ -1,0 +1,236 @@
+package at.ac.testing.brooklyn.policy.mocks;
+
+import polyglot.ext.pbnj.tologic.*;
+import polyglot.ext.pbnj.primitives.*;
+import at.ac.testing.mocks.*;
+import pbnj.util.ArrayList;
+import java.util.Arrays;
+
+
+/**
+ * This class contains the specification of the AutoScalerPolicy class that control the size of an object pool.
+ * The policy is really a composition of different elements, like for example the "ThesholdBasedPolicy"
+ */
+public class AutoScalerPolicyMock
+	ensures valid(){
+   
+    /**
+     * Contains the spec of the logic to scale the pool depending
+     * on the monitoring value, actually we use the TotalActivity, also known as RequestsCount
+     */
+    spec ThesholdBasedPolicy thesholdBasedPolicy;
+    
+    /**
+     * Spec of a bounded pool behavior
+     */
+    spec int size;   
+ 
+    spec int minSize;    
+    spec int maxSize;
+
+    /**
+     * Define a valid size for the pool
+     */
+    spec boolean validPool() {
+		return true &&
+			this.size >= this.minSize &&
+			this.size <= this.maxSize;
+    }
+
+    /**
+     * Define a configuration of the policy size for the pool
+     */
+    spec boolean validConfiguration() {
+		return true &&
+	    		this.minSize >= 0 &&
+			this.maxSize >= this.minSize
+		;
+    }
+
+    /**
+     * Class Invariant
+     */
+    spec boolean valid(){
+    	return 	true &&
+		validPool() &&
+		validConfiguration() &&
+		// Policy Conditions - Not sure they must be here
+		thesholdBasedPolicy != null &&
+		thesholdBasedPolicy.valid()
+	;
+    }
+    
+   
+    
+	/**
+	 * A valid requestsCount object must be not null and valid(). Not sure this must be specified here !
+	 */
+	spec boolean validRequestsCount(RequestsCount requestsCount){
+		return true &&
+			requestsCount != null &&
+			requestsCount.valid();
+	}
+	
+    /**
+     * Main Constructor
+     */
+    public AutoScalerPolicyMock(
+    	int lowerBound,
+    	int upperBound,
+    	int minSize,
+    	int maxSize,
+    	int initialSize) {
+	
+		this.minSize = minSize;
+		this.maxSize = maxSize;
+		this.size = initialSize;
+		
+		thesholdBasedPolicy = new ThesholdBasedPolicy(lowerBound, upperBound);
+	}
+    
+    
+    public String toString() {
+    	return ""+ 
+    		"Size " 	+ this.size 		+ "\n" +
+    		"MinSize " 	+ this.minSize 		+ "\n" +
+    		"MaxSize " 	+ this.maxSize 		+ "\n" +
+    		"Threshold Policy " + this.thesholdBasedPolicy 	+ "\n";
+    }
+    
+    public int getSize(){
+		return this.size;
+	}
+    
+	/**
+ 	 * This specification allows testers to generate sensors data that will trigger scale up or
+ 	 * scale down of the Resizable object
+	 * managed by the AutoScalerPolicy. The specification allows also to generate sequences of
+	 * data that leave the system in the same configuration as well.
+	 *
+	 * NOTE: we need "pure fresh" because we generate a completely new instance.
+	 * Otherwise the solver might try to reuse other instances leading to counter-intuitive results
+	 */
+	pure fresh public RequestsCount resize(int currentSize, int targetSize)
+		adds 1 RequestsCount
+		ensures
+			validRequestsCount(result) &&
+			( targetSize > currentSize ==> scalesUp(result, currentSize, targetSize) ) &&
+			( targetSize < currentSize ==> scalesDown(result, currentSize, targetSize) ) &&
+			( targetSize == currentSize ==> stays(result, currentSize, targetSize) )
+	{
+		return null;
+	}
+	
+	/**
+	 * Same as before but with modification of the size filed of this object
+	 */
+	public double resizeDouble(int targetSize)
+		modifies fields AutoScalerPolicyMock:size
+		ensures
+			boundedResizeTo(targetSize) // TODO -> This one perform the actual resize, not sure this is the right approach.
+	{
+		return toDoubleMetricSensorValue(forceResize(targetSize));
+	}
+
+	/**
+	 * This mimics the action of a Sensor that takes the actual number of requests and produce the value that we need.
+	 * Different sensors might results in different values, so in the future take this out or put this logic inside a SensorCode.
+	 *
+	 * TODO THIS METHOD DOES NOT MODIFY ANYTHING, BUT I DO NOT KNOW HOW TO SAY THAT
+	 */	
+	public double toDoubleMetricSensorValue(RequestsCount requestsCount)
+	{
+		double sensor = (this.size > 0) ? ((double) requestsCount.requests ) /this.size : (double) requestsCount.requests; 
+		System.out.println("toMetricSensorValue " + requestsCount + " " + this.size + " --> " + sensor );
+		return sensor;
+	}
+	
+	/**
+	 * When a resize takes place, the "final" size of the system is limited by the min and max configurations
+	 * Is this already inside the validConfiguration() and validPool() ?
+	 */
+	spec boolean boundedResizeTo(int targetSize)
+	{
+		return true &&
+			(this.old.size != targetSize ) ==> this.size == targetSize &&
+			// TODO Boundary conditions -> should they be moved elsewher maybe ?
+			( ( targetSize > this.maxSize ) ==> this.size == this.maxSize ) &&
+			( ( targetSize < this.minSize ) ==> this.size == this.minSize );
+	}
+	
+
+	/**
+	 * Cannot use "modifies fields AutoScalerPolicyMock:size" here otherwise it will result
+	 * in UNSAT (but the same conditions split is different places does, so i suspect a
+	 * limit in the universe more than a logical error )
+	 */
+	pure fresh public RequestsCount forceResize(int targetSize)
+		adds 1 RequestsCount
+		ensures
+			validRequestsCount(result) &&
+			( targetSize > this.size ==> scalesUp(result, this.size, targetSize) ) &&
+			( targetSize < this.size ==> scalesDown(result, this.size, targetSize) ) &&
+			this.thesholdBasedPolicy.validRequestsCountForTargetConfiguration(result, this.size, targetSize)
+	{
+		return null;
+	}
+			
+	
+	spec boolean scalesUp(RequestsCount requestsCount, int currentSize, int targetSize){
+		return true &&
+			thesholdBasedPolicy.scalesUp(requestsCount, currentSize, targetSize);
+	}
+	
+	spec boolean scalesDown(RequestsCount requestsCount, int currentSize, int targetSize){
+		return true &&
+			thesholdBasedPolicy.scalesDown(requestsCount, currentSize, targetSize);
+	}
+	
+	spec boolean stays(RequestsCount requestsCount, int currentSize, int targetSize){
+		return true &&
+			thesholdBasedPolicy.validRequestsCountForTargetConfiguration(requestsCount, currentSize, targetSize);
+	}
+	
+    	public static void main(String[] args) {
+		//LogMap.SolverOpt_ArrayMaxSize = 10;
+		//LogMap.SolverOpt_debugLevel(1);
+
+		// This fails ... with a StackOverflow
+		// LogMap.SolverOpt_IntBitWidth = 12;
+
+		// This fails ... as UNSAT
+		// LogMap.SolverOpt_IntBitWidth = 8;
+		// This fails ... as UNSAT
+		// LogMap.SolverOpt_IntBitWidth = 9;
+
+		// This fails ... as UNSAT
+		// LogMap.SolverOpt_IntBitWidth = 10;
+		
+		// This works up to the first scale but fails ... as UNSAT in the second one
+		LogMap.SolverOpt_IntBitWidth = 11;
+
+		int lowerBound = 50;
+		int upperBound = 100;
+		int minSize = 1;
+		int maxSize = 20;
+		int initialSize = 5;
+
+		AutoScalerPolicyMock policy = new AutoScalerPolicyMock(lowerBound, upperBound, minSize, maxSize, initialSize);
+	
+		// Scale to 10 and get back the value of the sensor *should be something like ~200 which means RequestCounts.requests ~ 1000
+		double sensor10 = policy.resizeDouble( 10 );
+		// policy.getSize(); // To check the actual size equals to 10 - targetSize 
+
+		System.out.println("\n\n\n\n To scale from " + initialSize + " to 10 I must generate " + sensor10 );
+
+
+		// This will fail ...		
+
+		// Scale to 11 *from 10, should be something like ~101 -> which means a RequestCounts.requests ~ 1100
+		double sensor11 = policy.resizeDouble( 11 );
+		policy.getSize(); // To check the actual size equals to 11 - targetSize 
+
+		System.out.println("\n\n\n\n To scale from " + 10 + " to 11 I must generate " + sensor11 );
+
+	}
+}

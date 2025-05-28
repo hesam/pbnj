@@ -1,0 +1,70 @@
+package at.ac.testing.pbnj.test6;
+
+import polyglot.ext.pbnj.tologic.LogMap;
+import at.ac.testing.pbnj.test6.NewPeriodicSchedule;
+import at.ac.testing.pbnj.test6.TimedAction;
+
+public class Test6 {
+	int stabilityPeriodUp = 4;
+	int stabilityPeriodDown = 4;
+	int controlPeriod = 3;
+	int monitoringPeriod = 1;
+	int actuationDelay = 0;
+
+	NewPeriodicSchedule schedule;
+
+	public static void setupSolver() {
+		LogMap.SolverOpt_IntBitWidth = 8;// 8;
+	}
+
+	public void printSummaryTest() {
+
+		monitoringPeriod = 1;
+		controlPeriod = 1;
+		stabilityPeriodUp = 4;
+		stabilityPeriodDown = 5;
+
+		schedule = new NewPeriodicSchedule(monitoringPeriod, stabilityPeriodUp, stabilityPeriodDown, controlPeriod, actuationDelay);
+
+		TimedAction[] targetStates = new TimedAction[] {//
+		// Time, State -> State
+				new TimedAction(1, 11, 9),// T
+				// new TimedAction(1, 120, 9),//
+				new TimedAction(2, 120, 9),//
+				new TimedAction(3, 6, 9),// T
+				new TimedAction(4, 6, 6), //
+				new TimedAction(5, 6, 120),//
+				new TimedAction(6, 120, 120), //
+				new TimedAction(7, 6, 10),// T
+				new TimedAction(8, 6, 12),//
+				new TimedAction(9, 6, 13),//
+				new TimedAction(10, 6, 16),//
+				new TimedAction(11, 6, 17),// T
+				new TimedAction(12, 6, 18) // T
+		};
+
+		// We force the given array to the public field of the pbnj-enhanced
+		// class (schedule)
+		schedule.inputActions = targetStates;
+		// This updates input actions
+		// We call this method that ensures that each TimedAction object is
+		// valid (basically it sets the ActionType for each action)
+
+		schedule.updateTypes();
+
+		// We force the just updated value to the main field
+		schedule.actions = schedule.inputActions;
+
+		// TODO This was the problematic method
+		schedule.printTriggerActions();
+
+		System.out.println("SUMMARY : " + schedule);
+	}
+
+	public static void main(String[] args) {
+	    //	    LogMap.SolverOpt_debugLevel(3);
+		Test6 test = new Test6();
+
+		test.printSummaryTest();
+	}
+}

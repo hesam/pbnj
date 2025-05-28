@@ -1,0 +1,186 @@
+---------------------------------------------------------------------------------------------
+  NEW:
+---------------------------------------------------------------------------------------------
+
+061413. spec modifier can only appear first.
+
+1206. in tgt.fld.m() tgt.fld has raw type instead of param type so doesn't work for generic cases
+      but tgt.fld().m() is okay
+
+0720. because this.fn_spec() is translated as static ThisClass.fn_spec_log() if this spec method
+is overriden by subtype and static type of this is that of super type then we call the super
+spec method instead of the subtype method. 
+
+0704. some class invariants don't get added (only one for object at front-end currently does)
+      (to fix just add global clauses forall o : Type | o.checkInvariants() for each invovled
+      class?)
+
+0703. if other classes come after public class newClassForLog() etc. don't get defined.
+
+308a. strange compile crash:
+      - in GridBagLayout.pbj:
+	ok-> return all PBJButton c1 : buttons | ...
+	crash-> return all PBJButton c1 : this.buttons |
+
+207a. float spec fields 
+
+205a. jdom field closure problem:
+           this.^parent but parent type Parent is an interface
+           - reflection to get field on interface wont work
+           - should we allow transitive closure on method calls as well:
+             - this.^getField()
+           
+128c.
+. Type checking in the modifies clause. (eg. Class name = priorityQueueTest. But in ensures clause, it's calling PriorityQueueTest, but it doesn't type check.)
+
+204e. inside staticInitializer localdecls not in scope
+
+203e. syntax for preconds: requires and type of exception thrown
+
+202b. 'does not modified fields'
+
+202c. 'does not modifies objects'
+
+
+---------------------------------------------------------------------------------------------
+  DONE:
+---------------------------------------------------------------------------------------------
+425a. formals were not being atomized and relationized (only cloned) before...
+
+317a. moved PBnJ/src/polyglot/ext/pbnj/solver to PBnJ/lib/solver
+
+316a. added min core report on implementation error (at point of fallback) when prover solver used
+
+316b. recompiled minisat, other binaries for x64 (java 1.6), made default solver
+
+308b. relationize() didn't call relationize() on array field elements
+
+226a. allow sat solver options on cmdline, also give an (untranslated) unsat core for unsat cases
+
+204a. provide an option for compiler to change the default solver: use $SOLVER_NUM as last arg on cmdline (now: DEFAULT=0 MiniSat=1)
+
+224a. fallback w/ array return type
+
+221a. only instances reachable from falling back object get relationized (and be part of 
+      logic universe)
+
+219a. on pure fresh ensured mtds, add result.verifyInvariants() call to ensures clause:
+      - pure fresh ArrayList<?> works ok (returns a fresh list with invariants ok)
+
+208b. all <ArrayList> | 
+      How to know we need to automatically translate to:
+      - Iterable libraries should implement: spec toPBJSet 
+      - so we can use the _log for quantified set in kodkod
+      - try:
+    spec public PBJSet<E> toPBJSet() {
+	return { all E e : this.elementData | 
+		     some int i : 0 .. this.size() - 1 | this.elementData[i] == e }; 
+    }
+
+217b. Iterable classes should relationize() their elements too
+
+217a. verifyFieldInvariants_<ensured mtd>()
+      - other than the calling class, class invariants of involved fields also need to be included
+201d. BIG ITEM: clean up parser. 
+      - parser should not do anything extra
+      - move auto mtd decls out of parser, insert a new pass to do it before translation
+
+208a. ensured method returning a new instance should be annotated as:
+      "fresh" 
+
+206a. static spec fields problem
+      - singular 
+
+D204b. - LogExpr vs. Expression return type:
+          spec Point p() { return p; } 
+      + fix: no need for LogExpr
+      + at translate time decide isOld
+
+D204d. add annotation @... to parser
+
+D204c. fieldsClosure() doesnt have the right type 
+
+D201b. local var decls dont get added to scope of quantified clauses coming after:
+      use context.getEnclosingClass/Mtd ? to know the vars in scope... 
+
+D203d. static spec translation incorrect
+
+D203e. mtd_fallback(Reference arg) isn't translated
+      e.g. m_fallback(IntExpression i, Content c) --> (IntExpression i, LogExpr c)
+
+D203a.  interface types don't recognize fallback_clone() and relationize()
+
+D202a. array == null not translated properly to kodkod due to arity difference
+      + translate to Obj.ArrayRelation.no() instead
+
+D201c. local var decls dont get added to scope of nested if then else 
+
+D201a. if(!(a instance b)) does not parse
+
+D129b.
+  - allow if stmts in spec methods
+
+D128a.
+   - multiple expr spec methods: allow temp vars
+
+D129a.
+. syntax for set set choose { some i | ... } or define PBJSet.choose()
+
+D128b.
+. syntax for intervals: i..j
+
+D10. get rid of explicit dummy instantiations:
+   - change translatation instead of doing point_get_log().x_get_log() so no dummy inst needed:
+   + use static method for _log translation versions to compose translations...
+
+D12.    - propatating _old for relation
+      e.g. old.pq.size ---> 
+
+D13. fallback_clone: look into array field clone
+
+D9. in fallback_clone use super.clone() instead of dummy instantiation
+
+D1. When the return type is an array,   this.queue_get_log().expression(); does not work. We could either make the return type LogSet instead of expression() or make everything expression().  
+    /* ****
+    PriorityQueue.java
+    *****/
+    public Object[] getQueue() {
+        return this.queue;
+    }
+    
+    public kodkod.ast.Expression getQueue_log() {
+        return this.queue_get_log().expression();
+    }
+    ***************************************************************************
+    /* priorityQueueTest.pbj
+    *****/
+    spec public boolean allPositive(){
+		all Node n : (Node[])this.pq.getQueue() | (n ==null || n.value > 0)
+    }
+    
+    Error: 
+    ----------------------------------------
+    quantifyOp(polyglot.ext.pbnj.tologic.LogSet,boolean,java.lang.String,polyglot.ext.pbnj.tologic.LogVar,kodkod.ast.Formula)
+    in polyglot.ext.pbnj.tologic.LogSet cannot be applied to
+    (kodkod.ast.Expression,boolean,java.lang.String,polyglot.ext.pbnj.tologic.LogVar,kodkod.ast.Formula)    
+     return
+    polyglot.ext.pbnj.tologic.LogSet.quantifyOp(this.pq_get_log().getQueue_log(),    
+     ^    
+     1 error    
+    -----------------------------------
+   
+D2. We should be able to cast an element. Eg: (Node)n == null; 
+
+D4. support for conditional expr translation to kodkod
+
+D3. PriorityQueue<E> <-- E type parameter translates to Object when relation is created
+   for its array, fallback won't work... need to translate range of relation from 
+   Object.class to the instantiated priorityQueue object, e.g. Node.class for a 
+   PriorityQueue<Node>.
+  
+   solution: when defining a generic field, if not created make a new specific relation
+   for the library type e.g. PriorityQueue<Node>, so that range is known...
+
+    
+D5. CommitModel / updateField methods don't use the owning class to update its fields,
+access issues...

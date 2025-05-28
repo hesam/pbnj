@@ -1,0 +1,12 @@
+package at.ac.testing.mocks;
+
+import polyglot.ext.pbnj.tologic.*;
+import polyglot.ext.pbnj.primitives.*;
+import pbnj.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+
+public class SubClass extends SuperClass {
+
+}

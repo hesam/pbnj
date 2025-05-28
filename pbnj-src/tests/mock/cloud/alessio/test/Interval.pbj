@@ -1,0 +1,20 @@
+package at.ac.testing.pbnj.test6;
+
+import polyglot.ext.pbnj.tologic.*;
+import polyglot.ext.pbnj.primitives.*;
+
+import pbnj.util.ArrayList;
+import java.util.Arrays;
+
+public class Interval {
+
+ 		spec public TimedAction start;
+ 		spec public int intervalDuration;
+ 		spec public int stable;
+ 		
+ 	public String toString(){
+ 		return
+ 			"Interval: stability " + stable + " duration " + intervalDuration + " action " + start + "\n"
+ 		;
+ 	}
+}  

@@ -1,0 +1,1 @@
+enum ActionType { SCALE_DOWN, SCALE_UP }

@@ -1,0 +1,250 @@
+package pbnj.examples.primitives;
+
+import polyglot.ext.pbnj.primitives.PBJInternSet;
+import polyglot.ext.pbnj.tologic.LogMap;
+import java.util.Random;
+import pbnj.util.HashSet;
+import pbnj.util.Set;
+import java.util.Collection;
+
+public class PBJMap<K,V>
+    ensures valid() {
+
+    static final Random rand = new Random();
+    
+    static final int MAX_LENGTH = 10;
+    spec public K[] keys;
+    spec public V[] values;
+    spec int size;
+    private int capacity;
+
+    public PBJMap() {
+	this(MAX_LENGTH);
+    }
+
+    public PBJMap(int s) {
+	this.capacity = s;
+	this.keys = (K[]) new Object[capacity];
+	this.values = (V[]) new Object[capacity];
+	this.size = 0;
+    }
+
+    spec public int size() { return size; }
+
+    spec public boolean valid() {
+	return this.keys != null && this.values != null && this.size >= 0 && this.size <= this.keys.length && this.keys.length == this.values.length && //nonNullKeys() &&
+	    uniqueKeys();
+    }
+
+    spec public boolean nonNullKeys() {
+	return all int i : 0 .. size - 1 |
+	    keys[i] != null;
+    }
+
+    spec public boolean uniqueKeys() {
+	return all int i : 0 .. size - 1 |
+	    all int j : 0 .. size - 1 | 
+	    (i == j || keys[i] != keys[j]);
+    }
+
+    spec public PBJInternSet<K> keySet_spec() {
+	return { all K i | (some int j : 0 .. size - 1 | keys[j] == i) };
+    }
+
+    public Collection<K> keySet() {
+	java.util.HashSet<K> res = new java.util.HashSet<K>();
+	for (int i = 0; i < size; i++)
+	    res.add(keys[i]);
+	return res;
+    }
+
+    public Collection<V> getValues() {
+	java.util.HashSet<V> res = new java.util.HashSet<V>();
+	for (int i = 0; i < size; i++)
+	    res.add(values[i]);
+	return res;
+    }
+
+    spec public PBJInternSet<V> getValues_spec() {
+	return { all V i | (some int j : 0 .. size - 1 | values[j] == i) };
+    }
+
+    spec public boolean containsKey_spec(Object key) {
+	return keySet_spec().contains(key);
+    }
+
+    //FIXME
+    public boolean containsKey(Object key) {
+	for (int i = 0; i < size; i++)
+	    if (key.hashCode() == keys[i].hashCode())
+		return true;
+	return false;
+
+    }
+
+    spec public V get_spec(K key) {
+	int i = indexOf((K) key);
+	return containsKey_spec(key) ? 
+	    this.values[i] : null;
+    }
+
+    spec public boolean equals_spec(PBJMap<K,V> o) {
+	return size == o.size && 
+	    keySet_spec().equals(o.keySet_spec()) &&
+	    (all K i : keySet_spec() | (get_spec(i) == o.get_spec(i)));
+    }
+
+    spec public int indexOf(Object key) 
+    {
+	PBJInternSet<Integer> is = { all int i : 0 .. this.size - 1 | this.keys[i] == key };
+	return is.size() == 0 ? -1 : is.get();
+    }
+
+    spec private boolean unchanged() {
+	return all int i : 0 .. this.old.size - 1 | 
+	    (this.keys[i] == this.old.keys[i] && 
+	     this.values[i] == this.old.values[i]);
+    }
+
+    spec private boolean unchangedExcept(int e) {
+	return all int i : 0 .. this.old.size - 1 | 
+	    (i == e ||
+	     (this.keys[i] == this.old.keys[i] && 
+	      this.values[i] == this.old.values[i]));
+    }
+
+    spec private boolean shiftStartingIndex(int e) {
+	return (all int j : 0 .. e - 1 | 
+	    (this.keys[j] == this.old.keys[j] && 
+	     this.values[j] == this.old.values[j]))
+	    && 
+	    (all int i : e .. this.size - 1 | 
+	     (this.keys[i] == this.old.keys[i+1] && 
+	      this.values[i] == this.old.values[i+1]));
+    }
+
+    spec public boolean put_spec(K key, V val) {
+	return this.old.containsKey_spec(key) ?
+	    (this.size == this.old.size && unchangedExcept(indexOf(key))) 
+	    :
+	    (this.size == 1 + this.old.size && this.keys[this.old.size] == key &&
+	     this.values[this.old.size] == val && unchanged());
+    }
+
+    public void put_new(K key, V val) 	
+	ensures put_spec(key, val) 
+    { }
+
+    public void put(K key, V val) 	
+    //ensures put_spec(key, val) 
+    {
+	if (containsKey(key))
+	    set(key, val);
+        else
+	    insert(key, val);
+    }
+
+    public /*pure*/ V get(K key) 	
+    //ensures this.old.containsKey(key) ==> result == this.old.get_spec(key)
+    {
+	if (containsKey(key)) {
+	    return valueAt(key);
+	} else {
+	    System.out.println("key " + key + " not found in: " + this);	    
+	    System.out.println("keyset: " + keySet());
+	    return null;
+	}
+    }
+
+    spec public boolean remove_spec(K key) {
+	return this.old.containsKey_spec(key) ?
+	    (this.size == this.old.size - 1 && shiftStartingIndex(old.indexOf(key))) 
+	    :
+	    (this.size == this.old.size && unchanged());
+    }
+
+    public void remove(K key) 	
+    {
+	if (containsKey(key)) {
+	    delete(key);
+	} else {
+	    System.out.println("key " + key + " not found in: " + this);
+	    System.out.println("keyset: " + keySet());
+	    System.exit(-1);
+	}
+    }
+
+    public void insert(K key, V val) 
+    {
+	if (size == capacity) {
+	    this.capacity = 2 * capacity;
+	    K[] newKeys = (K[]) new Object[capacity];
+	    V[] newValues = (V[]) new Object[capacity];	    
+	    for (int i = 0; i < size; i++) {
+		newKeys[i] = keys[i];
+		newValues[i] = values[i];
+	    }
+	    this.keys = newKeys;
+	    this.values = newValues;
+	}
+
+	keys[size] = key;
+	values[size++] = val;
+    }
+
+    public void delete(K key) 
+    {
+	int idx = indexOf(key);
+	for (;idx < size - 1; idx++) {
+	    keys[idx] = keys[idx+1];
+	    values[idx] = values[idx+1];
+	}
+	size--;
+    }
+
+    public void set(K key, V val) 
+    {
+	int idx = indexOf(key);
+	values[idx] = val;
+    }
+
+    spec private V valueAt_spec(K key) 
+    {
+	int idx = indexOf(key);
+	return values[idx];
+    }
+
+    private V valueAt(K key) 
+    {
+	for (int i = 0; i < size; i++)
+	    if (key.hashCode() == keys[i].hashCode())
+		return values[i];
+	return null;	
+    }
+    
+    public String toString() {
+	String res = "{ ";
+	for (int i = 0; i < size; i++)
+	    res += (keys[i] + "->" + values[i] + " ");
+	res += "}";
+	return res;
+    }
+
+    public static void main(String[] args) {
+	LogMap.SolverOpt_debugLevel(1);
+	LogMap.SolverOpt_IntBitWidth = 5;
+	//LogMap.SolverOpt_NaturalIntsOnly = true;
+	int SIZE = 2;
+	final PBJMap<Integer,Integer> c = new PBJMap<Integer,Integer>();
+	System.out.println(c);
+	for (int i = 0; i < SIZE; i++) {
+	    int v = rand.nextInt(10);
+	    System.out.println("adding " + i + " -> " + v);
+	    c.put(i, v);
+	    System.out.println(c);
+	}   
+	c.put_new(11,14);
+	System.out.println(c);
+
+    }
+}

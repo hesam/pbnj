@@ -1,0 +1,130 @@
+package pbnj.examples.primitives;
+
+import polyglot.ext.pbnj.primitives.PBJInternSet;
+import java.util.Random;
+import java.util.Set;
+import java.util.HashSet;
+
+public class PBJSet<E> 
+    ensures valid() {
+
+    static final Random rand = new Random();
+    
+    static final int MAX_LENGTH = 10;
+    spec E[] values;
+    spec int size;
+    //spec public E[] getValues() { return values; }
+    spec public int size() { return size; }
+
+    //FIXME: values_spec() has a bug, so need this for now...
+    spec public E get_spec(int i) { return values[i]; }
+
+    public PBJSet() {
+	this.values = (E[]) new Object[MAX_LENGTH];
+	this.size = 0;
+    }
+
+    spec public boolean valid() {
+	return this.values != null && this.size >= 0 && this.size <= this.values.length;
+    }
+
+    spec public PBJInternSet<E> values_spec() {
+	return { all E i | (some int j : 0 .. size - 1 | values[j] == i) };
+    }
+
+    spec public boolean contains(E val) {
+	return some int i : 0 .. size - 1 | values[i] == val;
+    }
+
+    spec public boolean contains_spec(Object val) {
+	return some int i : 0 .. size - 1 | values[i] == val;
+    }
+
+    spec private boolean unchanged() {
+	return all int i : 0 .. old.size - 1 |
+	    contains_spec(old.values[i]);
+    }
+
+    spec private boolean unchangedExcept(E val) {
+	return !contains(val) && 
+	    (all int i : 0 .. old.size - 1 | 
+	     (old.values[i] != val ==> contains_spec(old.values[i])));
+    }
+
+    spec public boolean add_spec(E val) {
+	return unchanged() &&
+	    (old.contains_spec(val) ==> 
+		size == old.size) &&		  
+	    (!(old.contains_spec(val)) ==> 
+	     (size == 1 + old.size && 
+	      contains(val)));
+    }
+
+    public void add(E val)
+    //ensures add_spec(val) 
+    {
+	System.out.println("adding " + val);
+	if (!contains(val))
+	    insert(val);
+    }
+
+    spec public boolean removeSpec(E val) {
+	return 
+	    (!(old.contains_spec(val)) ==> 
+	     (size == old.size &&
+	      unchanged())) &&		  
+	    (old.contains_spec(val) ==> 
+	     (size == old.size - 1 && 
+	      unchangedExcept(val)));
+    }
+
+    public void remove(E val)
+	//ensures removeSpec(val) 
+    {
+	System.out.println("removing " + val);
+	if (contains(val))
+	   delete(val);
+    }
+    
+    public void insert(E val)  {
+	values[size++] = val;
+    }
+
+    public void delete(E val) {
+	int idx = 0;
+	while (values[idx] != val)
+	    idx++;
+	for (;idx < size - 1; idx++)
+	    values[idx] = values[idx+1];
+	size--;
+    }
+
+    public Set<E> getValues() {
+	Set<E> res = new HashSet<E>();
+	for (int i = 0; i < size; i++)
+	    res.add(values[i]);
+	return res;
+    }
+    
+    public String toString() {
+	String res = "{ ";
+	for (int i = 0; i < size; i++)
+	    res += (values[i] + " ");
+	res += "}";
+	return res;
+    }
+
+    public static void main(String[] args) {
+	int SIZE = 2;
+	final PBJSet<Integer> c = new PBJSet<Integer>();
+	System.out.println(c);
+	for (int i = 0; i < SIZE; i++) {
+	    int v = rand.nextInt(10);
+	    c.add(i);
+	    System.out.println(c);
+	}
+	c.remove(c.values[0]);
+	System.out.println(c);
+    }
+    
+}

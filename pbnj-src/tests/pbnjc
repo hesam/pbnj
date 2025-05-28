@@ -1,0 +1,5 @@
+#!/bin/bash
+JAVA_LIB_CLASSES=$PBNJ_HOME/tests/classes
+SOLVERDIR=$PBNJ_HOME/lib/solver
+CURRDIR=`pwd`
+$PBNJ_HOME/bin/jlc -assert -ext pbnj -cp $JAVA_LIB_CLASSES:$SOLVERDIR/kodkod/jar/kodkod.jar:$CURRDIR:$PBNJ_CLASSPATH $@

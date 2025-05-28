@@ -1,0 +1,23 @@
+package at.ac.testing;
+
+import polyglot.ext.pbnj.tologic.LogMap;
+import at.ac.testing.mocks.SuperClass;
+import at.ac.testing.mocks.SubClass;
+import at.ac.testing.mocks.TimedAction;
+import java.util.Arrays;
+
+public class Test1 {        
+
+	public static void main(String[] args) {
+	    //LogMap.SolverOpt_debugLevel(2);
+
+	    SuperClass sc = new SuperClass();
+	    sc.init();
+	    
+	    // Here it is ok !
+	    
+	    SubClass ssc = new SubClass();
+	    ssc.init();
+	}
+    
+}

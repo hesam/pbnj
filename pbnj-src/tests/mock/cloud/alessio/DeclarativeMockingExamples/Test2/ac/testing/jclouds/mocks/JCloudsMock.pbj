@@ -1,0 +1,8 @@
+package at.ac.testing.jclouds.mocks;
+
+import at.ac.testing.mocks.CloudMock;
+
+public class JCloudMock extends CloudMock{
+
+
+}

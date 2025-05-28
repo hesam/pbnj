@@ -1,0 +1,60 @@
+package at.ac.testing.brooklyn.policy.mocks;
+
+import at.ac.testing.mocks.*;
+
+public class ThesholdBasedPolicy
+	ensures valid(){
+
+	spec int lowerBound;
+	spec int upperBound;
+
+	spec boolean valid(){
+		return true &&
+			this.lowerBound >= 0 &&
+			this.upperBound >= this.lowerBound;
+	}
+
+	public ThesholdBasedPolicy(int lowerBound, int upperBound) {
+		this.lowerBound = lowerBound;
+		this.upperBound = upperBound;
+	}
+
+	public String toString() {
+    	return "Policy: \n"+ 
+    		"Lower Bound " 	+ this.lowerBound 		+ "\n" +
+    		"Upper Bound " 	+ this.upperBound 		+ "\n";
+    }
+    
+    pure fresh public SensorReading resize(int currentSize, int targetSize)
+    	adds 1 SensorReading
+    	ensures
+    		( targetSize > currentSize ==> scalesUp(result) ) &&
+			( targetSize < currentSize ==> scalesDown(result) ) &&
+			validRequestsCountForTargetConfiguration(result, currentSize, targetSize)
+    {
+    	return null;
+    }
+    
+	spec public boolean validRequestsCountForTargetConfiguration(SensorReading sensorReading, int currentSize, int targetSize){
+		return true &&
+			// NOTE THAT THOSE ARE INTEGERS !
+			this.old.lowerBound == this.lowerBound &&
+			this.old.upperBound == this.upperBound &&
+			( sensorReading.value > targetSize * this.lowerBound / currentSize) &&
+			( sensorReading.value < targetSize * this.upperBound / currentSize)
+		; 
+	}
+
+    spec public boolean scalesUp(SensorReading sensorReading){
+		return true &&
+			( sensorReading.value > upperBound )
+		;
+	}
+	
+	
+	spec public boolean scalesDown(SensorReading sensorReading){
+		return true &&
+			( sensorReading.value < lowerBound )
+		;
+	}
+}

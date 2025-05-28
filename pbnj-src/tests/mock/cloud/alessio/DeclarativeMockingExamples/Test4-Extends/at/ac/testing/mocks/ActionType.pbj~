@@ -1,0 +1,8 @@
+package at.ac.testing.mocks;
+
+/**
+ * This class represent a timed action that contains
+ *data about an resize to execute and the time when it must/has been executed
+ */
+
+enum ActionType { SCALE_DOWN, SCALE_UP }

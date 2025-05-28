@@ -1,0 +1,1089 @@
+include "../../jl5/parse/jl5_ppg.cup"
+
+package polyglot.ext.pbnj.parse;
+
+import java.util.*;
+
+import polyglot.ext.pbnj.types.ESJTypeSystem;
+import polyglot.ext.pbnj.ast.*;
+import polyglot.ext.jl5.ast.*;
+import polyglot.ext.jl5.parse.*;
+
+
+parser Grm extends polyglot.ext.jl5.parse.Grm {:
+    public final ESJTypeSystem ts;
+    public final ESJNodeFactory nf;
+    
+    // Globals
+    // FIXME 
+    String currClassName;
+    static TypeNode BooleanTN, IntTN;
+
+    public void currClassName(String n) { this.currClassName = n; }
+    
+    static FlagAnnotations emptyFlags = makeFlagAnnotations();
+
+    public Grm(Lexer l, TypeSystem t, NodeFactory n, ErrorQueue q) {
+        super(l, t, n, q);
+        ts = (ESJTypeSystem) t;
+        nf = (ESJNodeFactory) n;
+	try {
+	    this.IntTN = this.nf.CanonicalTypeNode(null, ts.typeForName("java.lang.Integer"));
+	    this.BooleanTN = this.nf.CanonicalTypeNode(null, ts.typeForName("java.lang.Boolean"));
+	} catch (Exception e) {
+	    e.printStackTrace();
+	    System.exit(1);
+	}
+
+    }
+
+    public ESJEnsuredClassDecl defineEnsuredClass(FlagAnnotations a, String cN, List d, TypeNode e, List f, Expr z, List y) throws Exception {
+	       
+	FlagAnnotations fl2 = makePublicFlagAnnotations();
+	boolean hasPrimitiveFlag = false;
+	FlagAnnotations ap = a;
+	if (a.classicFlags().contains(ts.Primitive())) {
+	    hasPrimitiveFlag = true;
+	    ap = new FlagAnnotations();
+	    ap = ap.classicFlags(a.classicFlags().clear(ts.Primitive()));
+	}
+	
+	// add old field
+	AmbTypeNode tn0 = nf.AmbTypeNode(null, cN);
+
+	y.add(nf.JL5FieldDecl(null, fl2, nf.JL5AmbTypeNode(null, tn0.qual(), tn0.name(), d), "old", null));
+	// HACK FIXME: just a dummy field to indicate it implements PBJInternObject
+	y.add(nf.JL5FieldDecl(null, fl2, nf.CanonicalTypeNode(null, ts.Boolean()), "fallback_pbnj", null));
+
+	// add a result field
+	// HACK FIXME
+	y.add(nf.JL5FieldDecl(null, emptyFlags, nf.CanonicalTypeNode(null, ts.Object()), "fallback_field_result", null));
+	List resMtdFormals = new TypedList(new LinkedList(), Formal.class, false);
+	resMtdFormals.add(nf.JL5Formal(null, emptyFlags, nf.CanonicalTypeNode(null, ts.Object()), "r"));
+	y.add(nf.JL5MethodDecl(null, fl2, nf.CanonicalTypeNode(null, ts.Void()), "fallback_field_result", resMtdFormals, new TypedList(new LinkedList(), TypeNode.class, false), nf.Block(null,nf.Eval(null, nf.Assign(null, nf.JL5Field(null, nf.This(null), "fallback_field_result"), Assign.ASSIGN, nf.Local(null, "r")))), new TypedList(new LinkedList(), TypeNode.class, false))); 
+	return nf.ESJEnsuredClassDecl(null, ap, cN, e, f, nf.JL5ClassBody(null, y), d, z, hasPrimitiveFlag); 
+	
+    }
+
+     public ESJEnsuredMethodDecl makeESJEnsuredMethodDecl(Position pos,  JL5MethodDecl m, TypeNode b,
+							  Expr requiresExpr, Expr ensuresExpr, 
+							  List modifiableFields, Expr modifiableObjects, 
+							  List addedObjects) throws Exception {
+	 
+	 FlagAnnotations fl = emptyFlags;
+	 TypeNode cftn = this.nf.CanonicalTypeNode(null, this.ts.Throwable());
+	 JL5Formal catchFormal = this.nf.JL5Formal(null, fl, cftn, "rte");
+	 FlagAnnotations fln = new FlagAnnotations();
+	 JL5LocalDecl resultVar = nf.JL5LocalDecl(null, makeFlagAnnotations(), m.returnType(), "fallback_field_result", null);
+	 Flags flags = m.flags();
+	 boolean isPure = flags.contains(this.ts.Pure());
+	 boolean isFresh = flags.contains(this.ts.Fresh());
+	 boolean isUniqueResults = flags.contains(this.ts.UniqueResults());
+	 // if pure is set, modifiableFields is empty list:
+	 // if fresh is set, return value has to be a new instance, assume: adds 1 <retTp>
+	 if (isPure && isFresh) {
+	     modifiableFields = new TypedList(new LinkedList(), ESJModifiableField.class, false);
+	     if (addedObjects == null)
+		 addedObjects = new TypedList(new LinkedList(), Node.class, false);
+	     TypeNode retTp = m.returnType();	      
+	     addedObjects.add(retTp);
+	     addedObjects.add(nf.IntLit(null, IntLit.INT, 1));	     
+	     fln.classicFlags(flags.clear(this.ts.Pure()).clear(this.ts.Fresh()).clear(this.ts.UniqueResults()));
+	 } else if (isPure) {
+	     modifiableFields = new TypedList(new LinkedList(), ESJModifiableField.class, false);
+	     fln.classicFlags(flags.clear(this.ts.Pure()).clear(this.ts.UniqueResults()));
+	 } else if (isFresh) {
+	     if (addedObjects == null)
+		 addedObjects = new TypedList(new LinkedList(), Node.class, false);
+	     TypeNode retTp = m.returnType();	      
+	     addedObjects.add(retTp);
+	     addedObjects.add(nf.IntLit(null, IntLit.INT, 1));	     
+	     fln.classicFlags(flags.clear(this.ts.Fresh()).clear(this.ts.UniqueResults()));
+	 } else if (isUniqueResults)
+	     fln.classicFlags(flags.clear(this.ts.UniqueResults()));
+	 else
+	     fln.classicFlags(flags);	 
+	 ESJEnsuredMethodDecl res = this.nf.ESJEnsuredMethodDecl(pos, fln, m.returnType(), m.name(), m.formals(), m.throwTypes(), null, m.paramTypes(), requiresExpr, ensuresExpr, catchFormal, resultVar, modifiableFields, modifiableObjects, addedObjects, isFresh, isUniqueResults);	 
+	 //HACK FIXME
+	 Type bT = b.type();
+	 res = res.ensuresExpr(this.castResultVarInEnsuresClause(ensuresExpr, b instanceof JL5CanonicalTypeNode ? bT.isInt() ? this.IntTN : bT.isBoolean() ? this.BooleanTN : b : b, res));
+	 return res;
+     }    
+     
+     public ESJQuantifyExpr makeESJQuantifyExpr(Position pos, FormulaBinary.Operator quantKind, TypeNode tn, String quantVarN, Expr quantListExpr, Expr quantClauseExpr) throws Exception {
+	    
+	 if (quantKind == FormulaBinary.NO) {
+	     quantKind = FormulaBinary.ALL;
+	     quantClauseExpr = nf.Unary(null, Unary.NOT, quantClauseExpr);
+	 }
+	 if (quantListExpr == null)
+	     quantListExpr = nf.ESJQuantifyTypeExpr(null, tn);
+
+	    // FIXME
+	    if (tn.toString().equals("polyglot.ext.pbnj.primitives.PBJInteger{amb}")) {
+	       	 tn = nf.CanonicalTypeNode(null, ts.Int());
+	    }
+
+	    FlagAnnotations fl = emptyFlags; 
+	    List quantVarD = new TypedList(new LinkedList(), LocalDecl.class, false);
+	    List quantVarD2 = new TypedList(new LinkedList(), LocalDecl.class, false);
+	    JL5LocalDecl ld = nf.JL5LocalDecl(null, fl, tn, quantVarN, null);
+	    quantVarD.add(ld);
+	    propogateQuantVarDs(quantClauseExpr, quantVarD); //FIXME
+	    return this.nf.ESJQuantifyExpr(pos,quantKind,quantVarN, quantVarD, quantVarD2, quantListExpr,quantClauseExpr);
+}
+
+     // HACK FIXME:
+     public Expr castResultVarInEnsuresClause(Node ensuresExpr, TypeNode returnType, ESJEnsuredMethodDecl m) {
+	 if (ensuresExpr == null)
+	     return null;
+	 else if (ensuresExpr instanceof Binary) {
+	     Binary b = (Binary) ensuresExpr;
+	     b = b.left(castResultVarInEnsuresClause(b.left(),returnType, m));
+	     b = b.right(castResultVarInEnsuresClause(b.right(),returnType, m));
+	     return b;
+	 } else if (ensuresExpr instanceof Unary) {
+	     Unary b = (Unary) ensuresExpr;
+	     b = b.expr(castResultVarInEnsuresClause(b.expr(),returnType, m));
+	     return b;
+	 } else if (ensuresExpr instanceof Call) {
+	     Call c = (Call) ensuresExpr;
+	     List args = new TypedList(new LinkedList(), Expr.class, false);
+	     for (Expr e : (List<Expr>) c.arguments())
+		 args.add(castResultVarInEnsuresClause(e,returnType, m));
+	     return  nf.Call(null, castResultVarInEnsuresClause(c.target(),returnType, m), c.name(), args);
+	 } else if (ensuresExpr instanceof Field) {
+	     Field c = (Field) ensuresExpr;
+	     return  nf.ESJField(null, castResultVarInEnsuresClause(c.target(),returnType, m), c.name());
+	 } else if (ensuresExpr instanceof Conditional) {
+	     Conditional c = (Conditional) ensuresExpr;
+	     return nf.JL5Conditional(null, c.cond(), castResultVarInEnsuresClause(c.consequent(),returnType, m), castResultVarInEnsuresClause(c.alternative(),returnType, m));
+	 } else if (ensuresExpr instanceof ArrayAccess) {
+	     ArrayAccess c = (ArrayAccess) ensuresExpr;
+	     return nf.ArrayAccess(null, castResultVarInEnsuresClause(c.array(), returnType, m) , castResultVarInEnsuresClause(c.index(), returnType, m));
+	 } else if (ensuresExpr instanceof AmbExpr) {
+	     if (((AmbExpr) ensuresExpr).name().equals("result"))
+		 return nf.JL5Cast(null, returnType, nf.ESJResultField(null, nf.This(null), "fallback_field_result", m));
+	     else
+		 return (Expr) ensuresExpr;
+	 } else if (ensuresExpr instanceof AmbReceiver) {
+	     if (((AmbReceiver) ensuresExpr).name().equals("result"))
+		 return nf.JL5Cast(null, returnType, nf.ESJResultField(null, nf.This(null), "fallback_field_result", m));
+	     else
+		 return (Expr) nf.AmbExpr(null, ((AmbReceiver) ensuresExpr).name());
+	 } else if (ensuresExpr instanceof ESJQuantifyExpr) {
+	     ESJQuantifyExpr q = (ESJQuantifyExpr) ensuresExpr;
+	     q = q.quantClauseExpr(castResultVarInEnsuresClause(q.quantClauseExpr(), returnType, m));
+	     return q;
+	 } else {
+	     return (Expr) ensuresExpr;
+	 }
+     }
+
+     List fieldDeclHelper(FlagAnnotations a, TypeNode b, List c, boolean isSpec) throws Exception {
+	 if (isSpec)
+	     a = a.classicFlags(a.classicFlags().set(ts.Spec()));
+	 List l = new TypedList(new LinkedList(), ClassMember.class, false);
+	 for (Iterator i = c.iterator(); i.hasNext(); ) {
+	     VarDeclarator d = (VarDeclarator) i.next();
+	     JL5FieldDecl fd = isSpec ? nf.ESJFieldDecl(null, a , b, d.name, d.init, false, false) : nf.JL5FieldDecl(null, a , b, d.name, d.init);
+	     l.add(fd);
+	 }	    
+	 return l;
+     }
+
+     JL5New JL5NewHelper(Position pos, Expr qualifier, TypeNode tn, List h, ClassBody j, List d, Identifier e, List f, boolean amb) {
+	 if (amb) {
+	     TypeNode aa = (new JL5Name(this, this.pos(e), e.getIdentifier())).toType();
+	     tn = this.nf.JL5AmbTypeNode(this.pos(e, f), ((AmbTypeNode)aa).qual(), ((AmbTypeNode)aa).name(), f);
+	 } 
+	 boolean nonGeneric = ((JL5AmbTypeNode)tn).typeArguments().isEmpty();
+	 return nonGeneric  ? 
+	     nf.JL5New(pos, qualifier, tn, h, j, d) :
+	     nf.ESJParameterizedNew(pos, qualifier, tn, h, j, d);
+     }
+
+     List ensuredMethodDeclHelper(MethodDecl a, Block b) throws Exception {
+	 ESJEnsuredMethodDecl mainMtdDecl = (ESJEnsuredMethodDecl) a.body(b);
+	 List l = new TypedList(new LinkedList(), ClassMember.class, false);
+	 l.add(mainMtdDecl);
+	 return l; 
+     }
+
+     List specMethodDecl(MethodDecl a,Block y) throws Exception {
+	 ESJMethodDecl mainMtdDecl = this.nf.ESJMethodDecl(null, this.copyJL5MethodDeclFlagAnnotations(a), a.returnType(), a.name(), a.formals(), a.throwTypes(), y, new TypedList(new LinkedList(), TypeNode.class, false)); 
+	 List l = new TypedList(new LinkedList(), ClassMember.class, false);
+	 l.add(mainMtdDecl);
+	 return l; 
+     }
+
+     List specVariableDeclarators(TypeNode t, List a) throws Exception {
+	 List l = new TypedList(new LinkedList(), Stmt.class, false);
+	 l.addAll(this.variableDeclarators(t, a, this.makeFlagAnnotations()));
+	 return l;
+     }
+     
+     // FIXME
+     void propogateQuantVarDs(Node n, List quantVarD) {	 
+	 if (n instanceof Block) {
+	     for (Stmt s : (List<Stmt>) ((Block) n).statements())
+		 propogateQuantVarDs(s, quantVarD);
+	 } else if (n instanceof Return) {
+	     propogateQuantVarDs(((Return) n).expr(), quantVarD);
+	 } else if (n instanceof JL5LocalDecl) {
+	     propogateQuantVarDs(((JL5LocalDecl) n).init(), quantVarD);
+	 } if (n instanceof FormulaBinary) {
+	     FormulaBinary b = (FormulaBinary) n;
+	     propogateQuantVarDs(b.left(), quantVarD);
+	     propogateQuantVarDs(b.right(), quantVarD);
+	 } if (n instanceof Conditional) {
+	     Conditional c = (Conditional) n;
+	     propogateQuantVarDs(c.consequent(), quantVarD);
+	     propogateQuantVarDs(c.alternative(), quantVarD);
+	 } else if (n instanceof ESJIf) {
+	     ESJIf c = (ESJIf) n;
+	     propogateQuantVarDs(c.consequent(), quantVarD);
+	     propogateQuantVarDs(c.alternative(), quantVarD); 
+	 } else if (n instanceof ESJQuantifyExpr)
+	     ((ESJQuantifyExpr) n).quantVarD2(quantVarD);
+     }
+
+     static FlagAnnotations makeFlagAnnotations() {
+     	      List<Flags> fs = new ArrayList<Flags>();
+	      fs.add(Flags.NONE);
+     	      return makeFlagAnnotations(fs);
+     }
+
+     static FlagAnnotations makePublicFlagAnnotations() {
+	 List<Flags> fs3 = new ArrayList<Flags>();
+	 fs3.add(Flags.PUBLIC);
+	 return makeFlagAnnotations(fs3);
+     }
+
+     static FlagAnnotations makeFlagAnnotations(List<Flags> fs) {
+	      FlagAnnotations fl2 = new FlagAnnotations(); 
+	      for (Flags f: fs)
+              	  fl2.classicFlags(f);
+              fl2.annotations(new TypedList(new LinkedList(), AnnotationElem.class, false));
+	      return fl2;
+     }	      
+
+     FlagAnnotations copyJL5MethodDeclFlagAnnotations(MethodDecl methodDecl) {
+	 FlagAnnotations fl = new FlagAnnotations();
+	 fl = fl.classicFlags(methodDecl.flags()); 
+	 List annts = ((JL5MethodDecl_c) methodDecl).annotations();
+	 if (annts != null)
+	     fl = fl.annotations(annts);
+	 return fl;
+     }
+:};
+
+//terminal Token ESJXOR;
+terminal Token IMPLIES;
+terminal Token IFF;
+terminal Token SPEC;
+terminal Token ENSURES;
+terminal Token REQUIRES;
+terminal Token ASSUME;
+terminal Token PURE;
+terminal Token FRESH;
+terminal Token UNIQUERESULTS;
+terminal Token PRIMITIVE;
+terminal Token ADDS;
+terminal Token MODIFIESFIELDS;
+terminal Token MODIFIESOBJECTS;
+terminal Token SOME;
+terminal Token ALL;
+terminal Token NO;
+terminal Token ONE;
+terminal Token LONE;
+terminal Token DOTDOT;
+
+non terminal List spec_block_statement, spec_block_statements;
+non terminal Stmt spec_statement;
+non terminal Block spec_block;
+non terminal If spec_if_then_else_statement;
+non terminal Expr pbnj_qualified_name;
+non terminal ESJQuantifyExpr quantify_expression;
+non terminal Expr quant_set_expr, ensures_opt, requires_opt;
+non terminal ESJIntervalExpr spec_interval_expr;
+non terminal FormulaBinary.Operator quant_kind;
+non terminal FormulaBinary.Operator closure_kind;
+non terminal ESJModifiableField modifiableField;
+non terminal List fields_closure, identifiers_union, modifies_fields_opt, modifiableFields_list, adds_opt, addedObjects_list;
+non terminal Expr modifies_objects_opt;
+non terminal ESJEnsuredClassDecl ensured_class_declaration;
+non terminal Expr spec_expr, spec_expr_nn, postfix_spec_expr_nn, primary_spec_expr_nn, pbnj_array_access_nn;
+non terminal List spec_variable_declarators;
+non terminal VarDeclarator spec_variable_declarator;
+non terminal Expr or_spec_expr, or_spec_expr_nn;
+non terminal Expr and_spec_expr, and_spec_expr_nn;
+non terminal Expr implies_spec_expr, implies_spec_expr_nn;
+//non terminal Expr xor_spec_expr, xor_spec_expr_nn;
+non terminal Expr equality_spec_expr, equality_spec_expr_nn, higher_spec_expr, higher_spec_expr_nn;
+//non terminal Expr instanceof_spec_expr, instanceof_spec_expr_nn;
+non terminal Binary.Operator equality_spec_op;
+non terminal FormulaBinary.Operator implies_spec_op;
+non terminal Expr relational_spec_expr, relational_spec_expr_nn;
+non terminal Binary.Operator relational_spec_op, relational_predicate_nn_op;
+non terminal Expr additive_spec_expr, additive_spec_expr_nn, shift_spec_expr, shift_spec_expr_nn;
+non terminal Binary.Operator additive_spec_op, multiplicative_spec_op, shift_spec_op;
+non terminal Unary.Operator unary_spec_op;
+non terminal Expr multiplicative_spec_expr, multiplicative_spec_expr_nn;
+non terminal Expr unary_spec_expr, unary_spec_expr_nn, postfix_spec_expr;
+non terminal Expr primary_spec_expr;
+non terminal Expr pbnj_field_access, pbnj_method_invocation, pbnj_array_access;
+non terminal JL5Cast pbnj_cast_expression;
+non terminal Expr spec_literal;
+non terminal List pbnj_field_declaration;
+
+start with goal;
+
+// Here begins the PBnJ grammar extensions and modifications
+
+override class_member_declaration ::=
+     pbnj_field_declaration:a {: RESULT = a; :}
+  |  SPEC method_header:a spec_block:y
+          {: RESULT = parser.specMethodDecl(a,y); :}
+  |  method_declaration:a
+        {: List l = new TypedList(new LinkedList(), ClassMember.class, false);
+           l.add(a);
+           RESULT = l; :}
+  |  interface_declaration:a {:
+                            List l = new TypedList(new LinkedList(), ClassMember.class, false);
+			    l.add(a); 
+           RESULT = l; 
+                            :}
+  |  enum_declaration:a {: 
+                       List l = new TypedList(new LinkedList(), ClassMember.class, false);
+       l.add(a);
+       RESULT = l; 
+       :}
+  | method_header:a requires_opt:r modifies_fields_opt:y modifies_objects_opt:x adds_opt:w ENSURES spec_expr:z method_body:b
+	   {: 
+	       RESULT = parser.ensuredMethodDeclHelper(parser.makeESJEnsuredMethodDecl(a.position(), (JL5MethodDecl) a, a.returnType(), r, z, y, x, w), b); 
+	   :}
+/* |  modifiers_or_annotations_opt:a CLASS:b IDENTIFIER:c type_parameters_opt:d super_opt:e
+ interfaces_opt:f class_body:g {:
+                                                                                         
+                               List l = new TypedList(new LinkedList(), ClassMember.class
+, false);
+           l.add(parser.nf.JL5ClassDecl(parser.pos(b, g), a, c.getIdentifier(), e, f, g, 
+d));
+           RESULT = l; 
+                                                                                         
+	   :}*/
+  |  ensured_class_declaration:a 
+          {:
+	      List l = new TypedList(new LinkedList(), ClassMember.class, false);
+	      l.add(a);
+	      RESULT = l; 
+	  :}
+	  ;
+
+extend assert_statement ::=
+    ASSUME spec_expr:a SEMICOLON:e 
+          {:
+	   RESULT = parser.nf.ESJAssume(parser.pos(a, e), a); 
+	  :}
+          ;
+
+// PART1:      ESJPredMethod
+
+spec_block ::=
+    LBRACE:n spec_block_statements:a RBRACE:d 
+          {:
+	     RESULT = parser.nf.ESJBlock(parser.pos(n, d), a); 
+	  :}
+  | SEMICOLON
+          {:
+	     RESULT = null;
+	  :}
+          ;  
+
+spec_block_statements ::=
+    spec_block_statement:a 
+          {:
+	     List l = new TypedList(new LinkedList(), Stmt.class, false);
+	     l.addAll(a);
+	     RESULT = l; 
+	  :}
+  | spec_block_statements:a spec_block_statement:b 
+          {:
+	     RESULT = a;
+	     a.addAll(b); 
+	  :}
+          ;
+
+spec_block_statement ::=
+    type:t spec_variable_declarators:a SEMICOLON
+         {: 
+            RESULT = parser.specVariableDeclarators(t, a);
+	 :}
+  | spec_statement:a 
+          {:
+	     List l = new TypedList(new LinkedList(), Stmt.class, false);
+	     l.add(a);
+	     RESULT = l; 
+	  :}
+          ;
+
+spec_statement ::=
+      spec_block:a 
+         {: RESULT = a;  :}
+  |   RETURN spec_expr:a SEMICOLON
+         {: RESULT = parser.nf.JL5Return(null, a); :}
+  |   spec_if_then_else_statement:a
+         {:  RESULT = a; :}
+         ;
+
+override class_instance_creation_expression ::=
+		NEW:a class_or_interface_type:b LPAREN:c argument_list_opt:d RPAREN:e class_body_opt:f
+		{: RESULT = parser.JL5NewHelper(parser.pos(a), null, b, d, f, new TypedList(new LinkedList(), TypeNode.class, false), null, null, false); :}
+	|	NEW:a type_arguments:b class_or_interface_type:c LPAREN:d argument_list_opt:e RPAREN:f class_body_opt:g
+        {: RESULT = parser.JL5NewHelper(parser.pos(a), null, c, e, g, b, null, null, false); :}
+	|	primary:a DOT:b NEW:c type_arguments_opt:d IDENTIFIER:e type_arguments_opt:f LPAREN:g argument_list_opt:h RPAREN:i class_body_opt:j
+        {: RESULT = parser.JL5NewHelper(parser.pos(a), a, null, h, j, d, e, f, true); :}
+	|	name:a DOT:b NEW:c type_arguments_opt:d IDENTIFIER:e type_arguments_opt:f LPAREN:g argument_list_opt:h RPAREN:i class_body_opt:j
+        {: 
+	    RESULT = parser.JL5NewHelper(parser.pos(a), a.toExpr(), null, h, j, d, e, f, true); 
+	:}
+        ;
+
+spec_variable_declarators ::=
+      spec_variable_declarator:a 
+         {:
+	    List l = new TypedList(new LinkedList(), VarDeclarator.class, false);
+	    l.add(a);
+	    RESULT = l; 
+	 :}
+  |   spec_variable_declarators:a COMMA spec_variable_declarator:b
+         {:
+	    RESULT = a;
+	    a.add(b); 
+	 :}
+         ;
+
+spec_variable_declarator ::=
+      IDENTIFIER:a EQ spec_expr:b 
+         {: VarDeclarator v = new VarDeclarator(parser.pos(a),
+						a.getIdentifier()); 
+	    v.init = b; 
+	    RESULT = v;           
+	 :}
+         ;
+
+spec_if_then_else_statement ::=
+      IF:n LPAREN spec_expr:a RPAREN spec_statement:b ELSE spec_statement:c 
+         {:
+	    RESULT = parser.nf.ESJIf(parser.pos(n, c), a, b, c); 
+	 :}
+         ;
+
+spec_expr ::=
+         or_spec_expr:a
+	     {: RESULT = a; :}   
+    |    or_spec_expr:a QUESTION higher_spec_expr:b COLON spec_expr:c 
+	     {:
+	        RESULT = parser.nf.JL5Conditional(parser.pos(a, c), a, b, c); 
+	     :}
+             ; 
+
+spec_expr_nn ::=
+         or_spec_expr_nn:a
+	     {: RESULT = a; :}   
+    |    name:a QUESTION higher_spec_expr:b COLON spec_expr:c 
+	     {:
+		 RESULT = parser.nf.JL5Conditional(parser.pos(a, c), a.toExpr(), b, c); 
+	     :}
+    |    or_spec_expr_nn:a QUESTION higher_spec_expr:b COLON spec_expr:c 
+	     {:
+	        RESULT = parser.nf.JL5Conditional(parser.pos(a, c), a, b, c); 
+	     :}
+             ; 
+
+or_spec_expr ::=
+        and_spec_expr:a 
+             {: RESULT = a; :}
+  |     or_spec_expr:a OROR and_spec_expr:b
+	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a,
+						Binary.COND_OR, b, "or"); 
+	    :}
+            ;    
+
+or_spec_expr_nn ::=
+        and_spec_expr_nn:a 
+             {: RESULT = a; :}
+  |     name:a OROR and_spec_expr:b
+             {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a.toExpr(),
+						Binary.COND_OR, b, "or"); 
+						:}
+  |     or_spec_expr_nn:a OROR and_spec_expr:b
+	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a,
+						Binary.COND_OR, b, "or"); 
+	    :}
+            ;    
+
+
+and_spec_expr ::=
+        implies_spec_expr:a 
+             {: RESULT = a; :}
+  |     and_spec_expr:a ANDAND implies_spec_expr:b
+	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a, Binary.COND_AND, b); :}
+            ;    
+
+and_spec_expr_nn ::=
+        implies_spec_expr_nn:a 
+             {: RESULT = a; :}
+  |     name:a ANDAND implies_spec_expr:b
+	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a.toExpr(),
+						Binary.COND_AND, b); 
+						:}
+  |     and_spec_expr_nn:a ANDAND implies_spec_expr:b
+	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a,
+						Binary.COND_AND, b); 
+	    :}
+            ;    
+
+implies_spec_expr ::=
+        higher_spec_expr:a 
+             {: RESULT = a; :}
+  |     implies_spec_expr:a IMPLIES higher_spec_expr:b
+	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a,
+						FormulaBinary.COND_IMPLIES, b, "implies"); 
+	    :}
+  |     implies_spec_expr:a IFF higher_spec_expr:b
+	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a,
+						FormulaBinary.COND_IFF, b, "iff"); 
+	    :}
+            ;    
+
+implies_spec_expr_nn ::=
+        higher_spec_expr_nn:a 
+             {: RESULT = a; :}
+  |     name:a implies_spec_op:c higher_spec_expr:b
+	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a.toExpr(), c, b, "implies"); 
+	    :}
+  |     implies_spec_expr_nn:a implies_spec_op:c higher_spec_expr:b
+	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a, c, b, "implies"); 
+	    :}
+            ;
+
+/*
+xor_spec_expr ::=
+        higher_spec_expr:a 
+             {: RESULT = a; :}
+  |     xor_spec_expr:a ESJXOR higher_spec_expr:b
+	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a,
+						FormulaBinary.COND_XOR, b, "xor"); 
+	    :}
+            ;    
+
+// xor_spec_expr_nn ::=
+//         higher_spec_expr_nn:a 
+//              {: RESULT = a; :}
+//   |     name:a ESJXOR higher_spec_expr:b
+// 	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a.toExpr(),
+// 						FormulaBinary.COND_XOR, b, "xor"); 
+// 						:}
+//   |     xor_spec_expr_nn:a ESJXOR higher_spec_expr:b
+// 	    {: RESULT = parser.nf.FormulaBinary(parser.pos(a), a,
+// 						FormulaBinary.COND_XOR, b, "xor"); 
+// 						:}
+//             ;    
+*/
+
+higher_spec_expr ::=
+        quantify_expression:a
+	    {: RESULT = a; :}
+    |   LBRACE quantify_expression:a RBRACE
+	    {: RESULT = a.convertToComprehension(); :} 
+    |   equality_spec_expr:a
+	    {: RESULT = a; :}
+            ;
+
+higher_spec_expr_nn ::=
+        quantify_expression:a
+	    {: RESULT = a; :}
+    |   LBRACE quantify_expression:a RBRACE
+	    {: RESULT = a.convertToComprehension(); :} 
+    |   equality_spec_expr_nn:a
+	    {: RESULT = a; :}
+            ;
+
+quantify_expression ::=
+    quant_kind:a type:g name:b quant_set_expr:d OR:e higher_spec_expr:f
+       	   {: 
+	    RESULT = parser.makeESJQuantifyExpr(null,a,g,b.toString(),d,f); 
+	   :} 
+	   ;
+
+quant_set_expr ::=	
+        COLON additive_spec_expr:a DOTDOT additive_spec_expr:b
+           {: RESULT = parser.nf.ESJIntervalExpr(null, a, b); :}
+     |  COLON unary_spec_expr:a
+           {: RESULT = a; :}
+     |     {:  RESULT = null;  :}
+           ;
+
+/*
+spec_interval_expr ::=
+       additive_spec_expr:a DOTDOT additive_spec_expr:b
+           {: RESULT = parser.nf.ESJIntervalExpr(null, a, b); :}
+           ;
+*/
+
+quant_kind ::=
+        ALL {: RESULT = FormulaBinary.ALL; :}
+     |  SOME {: RESULT = FormulaBinary.SOME; :}
+     |  NO {: RESULT = FormulaBinary.NO; :}
+     |  ONE {: RESULT = FormulaBinary.ONE; :}
+     |  LONE {: RESULT = FormulaBinary.LONE; :}
+    ;
+
+equality_spec_expr ::=
+    //instanceof_spec_expr:a
+       relational_spec_expr:a
+            {: RESULT = a; :}
+  //|   instanceof_spec_expr:a  equality_spec_op:b
+    |   relational_spec_expr:a  equality_spec_op:b
+            equality_spec_expr:c
+	    {: RESULT = parser.nf.CmpBinary(parser.pos(a), a, b, c, null); :} 
+            ;
+
+equality_spec_expr_nn ::=
+    //instanceof_spec_expr_nn:a
+      relational_spec_expr_nn:a
+            {: RESULT = a; :}
+    //|   name:a equality_spec_op:b instanceof_spec_expr:c
+    |   name:a equality_spec_op:b relational_spec_expr:c
+	    {: RESULT = parser.nf.CmpBinary(parser.pos(a), a.toExpr(), b, c, null); :} 
+    //|   equality_spec_expr_nn:a equality_spec_op:b instanceof_spec_expr:c
+    |   equality_spec_expr_nn:a equality_spec_op:b relational_spec_expr:c
+            {: RESULT = parser.nf.CmpBinary(parser.pos(a), a, b, c, null); :}
+            ;
+
+equality_spec_op ::=
+        EQEQ 
+            {: RESULT = Binary.EQ; :}
+    |   NOTEQ 
+            {: RESULT = Binary.NE; :}
+            ;
+
+implies_spec_op ::=
+        IMPLIES 
+            {: RESULT = FormulaBinary.COND_IMPLIES; :}
+    |   IFF 
+            {: RESULT = FormulaBinary.COND_IFF; :}
+            ;
+
+// instanceof_spec_expr ::=
+//         relational_spec_expr:a
+//             {: RESULT = a; :}
+//     |   unary_spec_expr:a INSTANCEOF:b reference_type:c 
+//            {: RESULT = parser.nf.JL5Instanceof(parser.pos(a, c), a, c); :}
+//             ;
+
+// instanceof_spec_expr_nn ::=
+//         relational_spec_expr_nn:a
+//             {: RESULT = a; :}
+//     |   name:a INSTANCEOF:b reference_type:c 
+//             {: RESULT = parser.nf.JL5Instanceof(parser.pos(a, c), a.toExpr(), c); :}
+// //     |   unary_spec_expr_nn:a INSTANCEOF:b reference_type:c 
+// //             {: RESULT = parser.nf.JL5Instanceof(parser.pos(a, c), a, c); :}
+//             ;
+
+relational_spec_expr ::=
+	additive_spec_expr:a
+            {: RESULT = a; :}
+    |   relational_spec_expr:a relational_spec_op:b additive_spec_expr:c
+	    {: RESULT = parser.nf.CmpBinary(parser.pos(a), a, b, c, null); :}
+    ;
+
+relational_spec_expr_nn ::=
+	additive_spec_expr_nn:a
+            {: RESULT = a; :}
+    |   name:a relational_spec_op:b additive_spec_expr:c
+            {: RESULT = parser.nf.CmpBinary(parser.pos(a), a.toExpr(), b, c, null); :}
+    |   relational_spec_expr_nn:a relational_spec_op:b additive_spec_expr:c
+	    {: RESULT = parser.nf.CmpBinary(parser.pos(a), a, b, c, null); :}
+    ;
+
+relational_spec_op ::=
+       LT {: RESULT = Binary.LT; :}
+   |   LTEQ {: RESULT = Binary.LE; :}
+   |   GT {: RESULT = Binary.GT; :}
+   |   GTEQ {: RESULT = Binary.GE; :}
+   ;
+    
+/*
+shift_spec_expr ::=
+       additive_spec_expr:a 
+            {:  RESULT = a;  :}
+   |   shift_spec_expr:a shift_spec_op:c additive_spec_expr:b 
+            {: RESULT = parser.nf.Binary(parser.pos(a, b), a, c, b); :}
+            ;
+
+// shift_spec_expr_nn ::=
+//        additive_spec_expr_nn:a 
+//             {:  RESULT = a;  :}
+//    |   name:a shift_spec_op:c additive_spec_expr:b 
+//             {: RESULT = parser.nf.Binary(parser.pos(a, b), a.toExpr(), c, b); :}
+//    |   shift_spec_expr_nn:a shift_spec_op:c additive_spec_expr:b 
+//             {: RESULT = parser.nf.Binary(parser.pos(a, b), a, c, b); :}
+//             ;
+
+shift_spec_op ::=
+        LSHIFT {: RESULT = Binary.SHL; :}
+   |    RSHIFT {: RESULT = Binary.SHR; :}
+   ;
+*/
+
+additive_spec_expr ::=
+        multiplicative_spec_expr:a
+	   {: RESULT = a; :}
+   |    additive_spec_expr:a additive_spec_op:b multiplicative_spec_expr:c
+           {: RESULT = parser.nf.ESJBinary(parser.pos(a), a, b, c); :}
+   ;
+
+additive_spec_expr_nn ::=
+      multiplicative_spec_expr_nn:a
+	   {: RESULT = a; :}
+   |  name:a additive_spec_op:b multiplicative_spec_expr:c
+	{: RESULT = parser.nf.ESJBinary(parser.pos(a), a.toExpr(), b, c); :}
+   |  additive_spec_expr_nn:a additive_spec_op:b multiplicative_spec_expr:c
+        {: RESULT = parser.nf.ESJBinary(parser.pos(a), a, b, c); :}
+   ;
+
+additive_spec_op ::=
+        PLUS {: RESULT = Binary.ADD; :}
+   |    MINUS {: RESULT = Binary.SUB; :}
+   ;
+ 
+multiplicative_spec_expr ::=
+        unary_spec_expr:a
+	   {: RESULT = a; :}
+   |    multiplicative_spec_expr:a multiplicative_spec_op:c unary_spec_expr:b
+	   {: RESULT = parser.nf.ESJBinary(parser.pos(a), a, c, b); :}
+   ;
+
+multiplicative_spec_expr_nn ::=
+        unary_spec_expr_nn:a
+	   {: RESULT = a; :}
+   |    name:a multiplicative_spec_op:c unary_spec_expr:b
+           {: RESULT = parser.nf.ESJBinary(parser.pos(a), a.toExpr(), c, b); :}
+   |    multiplicative_spec_expr_nn:a multiplicative_spec_op:c unary_spec_expr:b
+	   {: RESULT = parser.nf.ESJBinary(parser.pos(a), a, c, b); :}
+   ;
+
+multiplicative_spec_op ::=
+        MULT {: RESULT = Binary.MUL; :}
+   |    DIV {: RESULT = Binary.DIV; :}
+   ;
+
+unary_spec_expr ::=
+	postfix_spec_expr:a 
+	    {: RESULT = a; :}
+    |   unary_spec_op:b unary_spec_expr:a
+	    {: RESULT = parser.nf.Unary(parser.pos(a), b, a); :}
+//     |   pbnj_cast_expression:a
+//             {: RESULT = a; :}
+    ;
+
+unary_spec_expr_nn ::=
+	postfix_spec_expr_nn:a 
+	    {: RESULT = a; :}
+    |   unary_spec_op:b unary_spec_expr:a
+	    {: RESULT = parser.nf.Unary(parser.pos(a), b, a); :}
+    |   pbnj_cast_expression:a
+            {: RESULT = a; :}
+    ;
+
+unary_spec_op ::=
+        MINUS {: RESULT = Unary.NEG; :}
+   |    NOT {: RESULT = Unary.NOT; :}
+   ;
+
+pbnj_cast_expression ::=
+       LPAREN:a primitive_type:b dims_opt:c RPAREN:d unary_spec_expr:e 
+            {: 
+	       RESULT = parser.nf.JL5Cast(parser.pos(a, e, b), parser.array(b, c.intValue()), e); 
+	    :}
+   |   LPAREN:a simple_name:b RPAREN:c unary_spec_expr:d 
+            {: 
+               RESULT = parser.nf.JL5Cast(parser.pos(a, d, b), parser.exprToType(b.toExpr()), d); 
+	    :}
+//    |   LPAREN:a name:b dims:c RPAREN:d unary_spec_expr:e 
+//             {:
+// 	       RESULT = parser.nf.JL5Cast(parser.pos(a, e, b), parser.array(b.toType(), c.intValue()), e); 
+// 	    :}
+// /*   |   LPAREN:a name:b LT:c type_argument_list_1:d dims_opt:e RPAREN:f unary_spec_expr:g 
+//             {:
+// 	       AmbTypeNode aa = (AmbTypeNode)b.toType();
+// 	       RESULT = parser.nf.JL5Cast(parser.pos(a, g, b), parser.array(parser.nf.JL5AmbTypeNode(parser.pos(b, d), aa.qual(), aa.name(), d), e.intValue()), g); 
+//             :}
+// */
+     ;
+
+postfix_spec_expr ::=    
+    primary_spec_expr:a {: RESULT = a;  :}
+ |  pbnj_qualified_name:a {:  RESULT = a;  :}
+ |  name:a {:  RESULT = a.toExpr();  :}
+    ;
+
+postfix_spec_expr_nn ::=    
+    primary_spec_expr:a {: RESULT = a;  :}
+ |  pbnj_qualified_name:a {:  RESULT = a;  :}
+
+    ;
+
+primary_spec_expr ::=
+    //spec_literal:a {: RESULT = a; :}	   
+       literal:a {: RESULT = a; :}
+    |  THIS:a {:  RESULT = parser.nf.This(parser.pos(a));  :}
+    |  LPAREN spec_expr_nn:a RPAREN {:  RESULT = a;  :}
+    |  pbnj_field_access:a {:  RESULT = a;  :}
+    |  pbnj_method_invocation:a {:  RESULT = a;  :}
+    |  pbnj_array_access:a {:  RESULT = a;  :}
+    ;
+
+pbnj_field_access ::=
+        primary_spec_expr:a DOT IDENTIFIER:b 
+            {: 
+	       RESULT = parser.nf.ESJField(parser.pos(a, b, b), a, b.getIdentifier()); 
+            :}
+    |   SUPER:n DOT IDENTIFIER:a
+        {: RESULT = parser.nf.JL5Field(parser.pos(a),
+           parser.nf.Super(parser.pos(n)),
+           a.getIdentifier()); :}
+    |   primary_spec_expr:a closure_kind:c fields_closure:ids
+    {: RESULT = parser.nf.ESJFieldClosure(null, a, c == FormulaBinary.MAP ? "dontcare" : (String) ids.get(0), c, ids, parser.currClassName); 
+	    :}
+    |   primary_spec_expr:a DOT:c LPAREN identifiers_union:ids RPAREN
+    {: RESULT = parser.nf.ESJFieldClosure(null, a, (String) ids.get(0), FormulaBinary.SIMP, ids, parser.currClassName); 
+	    :}
+;
+
+pbnj_method_invocation ::=
+       name:a LPAREN argument_list_opt:b RPAREN:d 
+            {:
+	       RESULT = parser.nf.JL5Call(parser.pos(a,d),
+					  a.prefix == null ? null : a.prefix.toReceiver(),
+					  a.name, b, new TypedList(new LinkedList(), TypeNode.class, false)); 
+	    :}
+   |   primary_spec_expr:a DOT IDENTIFIER:b LPAREN argument_list_opt:c RPAREN:d 
+            {:
+	       RESULT = parser.nf.JL5Call(parser.pos(b,d), a,
+					  b.getIdentifier(), c, new TypedList(new LinkedList(), TypeNode.class, false)); 
+	    :}
+    |   SUPER:a DOT IDENTIFIER:b LPAREN argument_list_opt:c RPAREN:d
+            {: RESULT = parser.nf.JL5Call(parser.pos(a,d, b),
+                parser.nf.Super(parser.pos(a)),
+                b.getIdentifier(), c, new TypedList(new LinkedList(), TypeNode.class, false)); :}
+            ;
+
+pbnj_array_access ::=
+        name:a LBRACK spec_expr:b RBRACK:d 
+            {:
+	     RESULT = parser.nf.ArrayAccess(parser.pos(a, d), a.toExpr(), b); 
+	    :}
+    |   primary_spec_expr:a LBRACK spec_expr:b RBRACK:d 
+            {:
+	       RESULT = parser.nf.ArrayAccess(parser.pos(a, d), a, b); 
+	    :}
+            ;
+
+
+pbnj_qualified_name ::=
+    name:a closure_kind:c fields_closure:ids
+            {: 
+	       RESULT = parser.nf.ESJFieldClosure(null, a.toExpr(), c == FormulaBinary.MAP ? "dontcare" : (String) ids.get(0), c, ids, parser.currClassName);
+	    :}
+            ; 
+
+
+/*
+// currently only allowing ints, booleans, and null   
+spec_literal ::=
+        INTEGER_LITERAL:a    
+            {: RESULT = parser.nf.IntLit(parser.pos(a), IntLit.INT,
+                                     a.getValue().intValue()); :} 
+    |   BOOLEAN_LITERAL:a
+            {: RESULT = parser.nf.BooleanLit(parser.pos(a),
+                                         a.getValue().booleanValue()); :}
+    |   NULL_LITERAL:a
+            {: RESULT = parser.nf.NullLit(parser.pos(a)); :}
+    ;
+*/
+
+// PART2:  method esnures clause
+
+ensures_opt ::=
+           {: RESULT = parser.nf.BooleanLit(null, true);  :}
+     |  ENSURES spec_expr:a 
+           {:  RESULT = a;  :}
+	   ;
+
+requires_opt ::=
+{: RESULT = null;  :}
+     |  REQUIRES spec_expr:a 
+           {:  RESULT = a;  :}
+	   ;
+
+modifies_fields_opt ::=
+           {:
+	      RESULT = null;
+           :}
+     |  MODIFIESFIELDS modifiableFields_list:a
+           {:  
+	      RESULT = a;  
+	   :};
+
+modifiableFields_list ::=
+        modifiableField:a
+           {: List l = new TypedList(new LinkedList(), ESJModifiableField.class, false);
+	      l.add(a);
+	      RESULT = l; 
+	   :}
+     |  modifiableFields_list:a COMMA modifiableField:b
+           {: RESULT = a;
+	       a.add(b);
+	   :};
+
+modifiableField ::= 
+    type:a COLON simple_name:b 
+           {: RESULT = parser.nf.ESJModifiableField(parser.pos(a, b), a, b.toString()); :};
+
+modifies_objects_opt ::=
+           {:
+	      RESULT = null;
+           :}
+     |   MODIFIESOBJECTS primary_no_new_array:a
+           {:  
+	      RESULT = a;  
+	   :};
+
+adds_opt ::=
+           {:
+	      RESULT = null;
+           :}
+     |  ADDS addedObjects_list:a 
+           {:  
+	      RESULT = a;  
+	   :};
+
+addedObjects_list ::=
+    postfix_spec_expr:n type:a 
+           {: List l = new TypedList(new LinkedList(), Node.class, false);
+	    l.add(a);
+	      l.add(n);
+	      RESULT = l; 
+	   :}
+      |  addedObjects_list:l COMMA postfix_spec_expr:n type:a
+           {: RESULT = l;
+	       l.add(a);
+	      l.add(n);
+	   :};
+
+       
+
+// PART3:      ESJClassInvariantDecl
+
+override type_declaration ::=
+   ensured_class_declaration:a {: RESULT = a; :}
+|  interface_declaration:a  {: RESULT = a; :}
+|  SEMICOLON {:  RESULT = null;  :}
+|  enum_declaration:a {:  RESULT = a;  :};
+
+ensured_class_declaration ::=
+    modifiers_or_annotations_opt:a CLASS:b IDENTIFIER:c type_parameters_opt:d super_opt:e 
+    interfaces_opt:f ensures_opt:z LBRACE class_body_declarations_opt:y RBRACE
+    {: 
+	RESULT =  parser.defineEnsuredClass(a,c.getIdentifier(),d,e,f,z,y); 
+    :}
+    ;
+
+// PART4:	Relationizing instance variables
+pbnj_field_declaration ::=
+        SPEC modifiers_or_annotations_opt:a type:b variable_declarators:c SEMICOLON:e 
+           {:  RESULT =  parser.fieldDeclHelper(a, b, c, true); :}
+    |    modifiers_or_annotations_opt:a type:b variable_declarators:c SEMICOLON:e 
+           {: RESULT =  parser.fieldDeclHelper(a, b, c, false); :}
+	   ;
+
+// PART5:  closure field access
+
+closure_kind ::=
+        DOT MULT 
+           {: RESULT = FormulaBinary.RFLX; :}
+    |   DOT XOR 
+           {: RESULT = FormulaBinary.NONRFLX; :}
+    |   DOT GT 
+           {: RESULT = FormulaBinary.MAP; :}
+           ;
+
+fields_closure ::=
+
+        IDENTIFIER:a
+           {: List ids = new TypedList(new LinkedList(), String.class, false);
+	      ids.add(a.getIdentifier());
+	      RESULT = ids;
+	   :}
+    |   LPAREN identifiers_union:a RPAREN
+           {: RESULT = a;
+	   :}
+           ;
+
+identifiers_union ::=
+        IDENTIFIER:a
+           {: List ids = new TypedList(new LinkedList(), String.class, false);
+	      ids.add(a.getIdentifier());
+	      RESULT = ids;
+	   :}
+    |   identifiers_union:ids PLUS IDENTIFIER:a
+           {: ids.add(a.getIdentifier());
+	      RESULT = ids;
+	   :}
+           ;
+
+extend modifier ::=
+	PURE
+           {: RESULT = parser.ts.Pure(); :}
+    |   FRESH
+           {: RESULT = parser.ts.Fresh(); :}
+    |   UNIQUERESULTS
+           {: RESULT = parser.ts.UniqueResults(); :}
+    |   PRIMITIVE
+           {: RESULT = parser.ts.Primitive(); :}
+    ;
+ 
+
+// miscs
+
+// HACK FIXME
+// avoid generic array creation error...
+
+override array_creation_expression ::=
+    NEW:n primitive_type:a dim_exprs:b dims_opt:c {:
+                                                  RESULT = parser.nf.ESJNewArray(parser.pos(n, b), a, b,
+                c.intValue(), null); 
+                                                  :}
+ |  NEW:n class_or_interface_type:a dim_exprs:b dims_opt:c {:
+                                                           RESULT = parser.nf.ESJNewArray(parser.pos(n, b), a, b,
+                c.intValue(), null); 
+                                                           :}
+ |  NEW:n primitive_type:a dims:b array_initializer:c {:
+                                                      RESULT = parser.nf.ESJNewArray(parser.pos(n, c), a, Collections.EMPTY_LIST, b.intValue(), c); 
+                                                      :}
+ |  NEW:n class_or_interface_type:a dims:b array_initializer:c {:
+                                                               RESULT = parser.nf.ESJNewArray(parser.pos(n, c), a, Collections.EMPTY_LIST,  b.intValue(), c); 
+                                                               :};
+
+override array_creation_init ::=
+    NEW:a primitive_type:b dims:c array_initializer:d {:
+                                                      RESULT = parser.nf.ESJNewArray(parser.pos(a, d), b, Collections.EMPTY_LIST, c.intValue(), d); 
+                                                      :}
+ |  NEW:a class_or_interface_type:b dims:c array_initializer:d {:
+                                                               RESULT = parser.nf.ESJNewArray(parser.pos(a, d), b,
+                Collections.EMPTY_LIST, c.intValue(), d); 
+                                                               :};

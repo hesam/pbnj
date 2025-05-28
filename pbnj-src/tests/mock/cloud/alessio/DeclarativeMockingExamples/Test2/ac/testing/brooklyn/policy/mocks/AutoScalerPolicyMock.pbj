@@ -1,0 +1,108 @@
+package at.ac.testing.brooklyn.policy.mocks;
+
+import polyglot.ext.pbnj.tologic.*;
+import polyglot.ext.pbnj.primitives.*;
+import at.ac.testing.mocks.*;
+import pbnj.util.ArrayList;
+import java.util.Arrays;
+
+/**
+ * Directly Compute the value of the SENSOR and from the sensor compute the number of requests
+ */
+public class AutoScalerPolicyMock
+	ensures valid(){
+    
+    spec ThesholdBasedPolicy thesholdBasedPolicy;
+    
+    // NOT SURE
+    spec int size;    
+    spec int minSize;
+    spec int maxSize;
+    
+    spec boolean validConfiguration(){
+    	return true &&
+    		this.minSize >= 0 &&
+			this.maxSize >= this.minSize;
+    }
+    
+    spec boolean validPool(){
+    	return true &&
+    		this.size >= this.minSize &&
+			this.size <= this.minSize;
+    }
+    
+    /**
+     * Class Invariant
+     */
+    spec boolean valid(){
+    	return true &&
+			validConfiguration() &&
+			validPool() &&
+			// Policy Conditions
+			thesholdBasedPolicy != null &&
+			thesholdBasedPolicy.valid();
+    }
+    
+    /**
+     * Main Constructor
+     */
+    public AutoScalerPolicyMock(
+    	int lowerBound,
+    	int upperBound,
+    	int minSize,
+    	int maxSize,
+    	int initialSize) {
+	
+		this.minSize = minSize;
+		this.maxSize = maxSize;
+		this.size = initialSize;
+		
+		thesholdBasedPolicy = new ThesholdBasedPolicy(lowerBound, upperBound);
+	}
+    
+    
+    public String toString() {
+    	return ""+ 
+    		"Size " 	+ this.size 		+ "\n" +
+    		"MinSize " 	+ this.minSize 		+ "\n" +
+    		"MaxSize " 	+ this.maxSize 		+ "\n" +
+    		"Threshold Policy " + this.thesholdBasedPolicy 	+ "\n";
+    }
+    
+    public int getSize(){
+		return this.size;
+	}
+   
+	public SensorReading resize(int targetSize)
+		modifies fields AutoScalerPolicyMock:size
+		ensures
+			boundedResizeTo(targetSize)
+	{
+		 return forceResize(targetSize);
+	}
+	
+	spec boolean boundedResizeTo(int targetSize)
+	{
+		return true &&
+			(this.old.size != targetSize ) ==> this.size == targetSize &&
+			this.old.maxSize == this.maxSize &&
+			this.old.minSize == this.minSize;
+	}
+	
+
+	/**
+	 * Cannot use "modifies fields AutoScalerPolicyMock:size" here otherwise it will result
+	 * in UNSAT (but the same conditions split is different places does, so i suspect a
+	 * limit in the universe more than a logical error )
+	 */
+	pure fresh public SensorReading forceResize(int targetSize)
+		adds 1 SensorReading
+		ensures
+			( targetSize > this.size ==> this.thesholdBasedPolicy.scalesUp(result) ) &&
+			( targetSize < this.size ==> this.thesholdBasedPolicy.scalesDown(result) ) &&
+			this.thesholdBasedPolicy.validRequestsCountForTargetConfiguration(result, this.size, targetSize)
+	{
+		return null;
+	}
+    
+}

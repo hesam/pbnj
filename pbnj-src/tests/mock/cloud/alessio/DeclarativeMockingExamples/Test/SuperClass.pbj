@@ -1,0 +1,127 @@
+package at.ac.testing.pbnj;
+
+import polyglot.ext.pbnj.tologic.*;
+import polyglot.ext.pbnj.primitives.*;
+
+import pbnj.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+public class SuperClass 
+	ensures classInvariant() {
+
+	spec int intSize;
+	spec Integer integerSize;
+	spec int[] anArray;
+	spec Integer[] anIntegerArray; // THIS IS PROBLEMATIC WHEN WE WANT TO ADD NEW ELEMENTS ALSO IN SUPER CLASS
+	
+	spec boolean classInvariant(){
+		return
+			intSize != 0 &&
+			integerSize != null
+			&&
+			anArray != null
+			&&			
+			anIntegerArray != null &&
+			all Integer i : anIntegerArray | ( i != null )
+		;
+	}
+
+	public void init(){
+		initH();
+	}
+	
+	void initH()
+		modifies fields SuperClass:intSize, SuperClass:integerSize, SuperClass:anArray, SuperClass:anIntegerArray
+		ensures
+			positiveSize() &&
+			positiveArray() &&
+			positiveIntegerArray()
+	{ }
+	
+	spec boolean positiveArray(){
+		return
+			this.anArray.length > 1 &&
+			all int i : this.anArray | (i > 0 )
+		;
+	}
+	
+	spec boolean positiveIntegerArray(){
+		return
+			this.anIntegerArray.length == 4 &&
+			all Integer i : this.anIntegerArray | ( i > 0 )
+		;
+	}
+	
+	spec boolean positiveSize(){
+		return
+			this.intSize > 0 &&
+			this.integerSize > 0
+		;
+	}
+	
+	public void resize( int newSize )
+		modifies fields SuperClass:intSize, SuperClass:integerSize, SuperClass:anArray
+		// adds newSize Integer THIS CANNOT BE DONE !
+		ensures
+			positiveSize() &&
+			sameSize( newSize ) &&
+			resizeArray( newSize )
+	{	}
+	
+	public void updateAnArray( int newSize )
+		modifies fields SuperClass:anArray
+		ensures
+			matchingElements( newSize )
+	{	}
+	
+	public void updateAnIntegerArray( int newSize )
+		modifies fields SuperClass:anIntegerArray
+		ensures
+			matchingIntegerElements( newSize )
+	{	}
+	
+	spec boolean matchingElements( int elem ) {
+		return
+			all int i : 0 .. this.anArray.length - 1 | ( anArray[ i ] == elem )
+		;
+	}
+	
+	spec boolean matchingIntegerElements( int elem ) {
+		return
+			all Integer i : this.anArray | ( i == elem )
+		;
+	}
+	
+	
+	spec boolean resizeArray( int newSize ){
+		return
+			this.anArray.length == newSize &&
+			all Integer i : this.anArray | ( i > 0 )
+		;
+	}
+	
+	spec boolean sameSize( int newSize ){
+		return
+			this.intSize == newSize &&
+			this.integerSize == newSize
+		;
+	}
+	
+	public int getSize() {
+		return this.intSize;
+	}
+	
+	public Integer getIntegerSize() {
+		return this.integerSize;
+	}
+	
+	public String toString(){
+		return
+			"intSize " + intSize + "\n" +
+			"integerSize " + integerSize + "\n" +
+			"anArray " + Arrays.toString(anArray) + "\n" +
+			"anIntegerArray " + Arrays.toString(anIntegerArray) + "\n"
+		;
+	}
+}

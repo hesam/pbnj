@@ -1,0 +1,24 @@
+package at.ac.testing.pbnj.test10;
+
+public class SensorReading 
+	ensures valid(){
+	
+	// Note that we can use Integer and force requests != null 
+	spec public int value;
+	
+	spec public int multiplier;
+
+	spec public boolean valid() {
+		return
+			this.value >= 0 &&
+			this.multiplier >= 1
+		;
+	}
+	public int getValue(){
+		return this.value * this.multiplier;
+	
+	}
+	public String toString() {
+		return "Sensor [Value: " + value + ", Multiplier " + multiplier +"]";
+    }
+}

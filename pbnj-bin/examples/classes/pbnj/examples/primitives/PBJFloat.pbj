@@ -1,0 +1,35 @@
+package pbnj.examples.primitives;
+
+import java.util.HashMap;
+
+public final primitive class PBJFloat
+    implements java.io.Serializable
+{
+    spec private int whole, part;
+    
+    private static HashMap<Float,PBJFloat> instances = new HashMap<Float,PBJFloat>();
+
+    public static PBJFloat get(float original) {
+	if (instances.containsKey(original))
+	    return instances.get(original);
+	return new PBJFloat(original);
+    }
+
+    public PBJFloat(float f) {
+	String n = f + "";
+	int i = n.lastIndexOf('.');
+	int s = n.length();
+	String wn = n.substring(0, i);
+	String pn = n.substring(i + 1);
+	try {
+	    this.whole = Integer.parseInt(wn);
+	    this.part = Integer.parseInt(pn);
+	} catch (Exception e) { System.exit(1); }
+	if (!instances.containsKey(f))
+	    instances.put(f, this);
+    }
+
+    public String toString() {
+	return whole + "." + part;
+    }
+}

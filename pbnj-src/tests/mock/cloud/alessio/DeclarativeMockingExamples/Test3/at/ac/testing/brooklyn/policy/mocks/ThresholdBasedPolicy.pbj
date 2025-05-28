@@ -1,0 +1,71 @@
+package at.ac.testing.brooklyn.policy.mocks;
+
+import at.ac.testing.mocks.*;
+import polyglot.ext.pbnj.tologic.LogMap;
+
+/**
+* This spec says that for the scale up it's sufficient to have a value > current UB. To scale right to a given target conf the value should also be 
+* value < target UB. This means that the final value might be value < target * LB. When this happens we have a reshourceThrashing situation because
+* At the same time both scaleUp(current) and scaleDown(target) are enabled.
+*
+* Similarly for a scale down it is enough value < current LB and value > target LB.
+* This might allow for value > target UB, that leads to resourceThrashing because scaleDown(current) and scaleUp(target) are enabled at the same time.
+*
+* Resource thrashing is possible only when the boundaries of subsequent configurations are non-overlapping, which means that
+* for any configuration c, c2 Exists LB and UB such that c*UB < c*LB and LB<=UB and c2 = c+1
+*
+* Nevertheless, when we are asked to produce a value to scale up and scale down we must return something which is either
+* fullyContainted or resourceThrashing. Then is up to the implementation of the policy to avoid resource thrashing.
+* 
+* This is simply because THIS spec is about the load not about the autoscaling !
+*/
+public class ThesholdBasedPolicy
+	ensures valid(){
+
+	spec int lowerBound;
+	spec int upperBound;
+
+	spec int value;
+
+	spec boolean valid(){
+		return true &&
+			this.lowerBound >= 0 &&
+			this.upperBound >= this.lowerBound;
+	}
+
+	public ThesholdBasedPolicy(int lowerBound, int upperBound) {
+		this.lowerBound = lowerBound;
+		this.upperBound = upperBound;
+	}
+
+	public String toString() {
+    	return "Policy: \n"+ 
+    		"Lower Bound " 	+ this.lowerBound 		+ "\n" +
+    		"Upper Bound " 	+ this.upperBound 		+ "\n";
+    	}
+    
+   pure fresh public SensorReading resize()
+    	adds 1 SensorReading
+    	ensures
+		result != null && // This results in UNSAT !
+		scalesDown(result)
+    {
+    	return null;
+    }
+	
+	spec public boolean scalesDown(SensorReading sensorReading){
+		return true &&
+			sensorReading.value < this.lowerBound 
+		;
+	}
+
+    public static void main(String[] args) {
+	LogMap.SolverOpt_IntBitWidth = 8;
+
+	ThesholdBasedPolicy t = new ThesholdBasedPolicy(10,11);
+
+	// The only possible solution here apparently is sensorReading == null !
+	System.out.println( t.resize() );
+    }
+	
+}

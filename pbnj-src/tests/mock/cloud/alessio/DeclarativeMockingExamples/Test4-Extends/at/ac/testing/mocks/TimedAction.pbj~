@@ -1,0 +1,37 @@
+package at.ac.testing.mocks;
+
+/**
+ * This class represent a timed action that contains
+ *data about an resize to execute and the time when it must/has been executed
+ */
+
+
+public class TimedAction {
+	// ensures valid() { - Not sure about this 
+	
+	spec public Integer time;
+	spec public Integer startSize;
+	spec public Integer targetSize;
+    spec public ActionType actionType;
+	
+	public TimedAction(){
+	}
+	
+    public TimedAction(Integer time, Integer startSize, Integer targetSize, ActionType actionType){
+		this.time = time;
+		this.startSize = startSize;
+		this.targetSize = targetSize;
+		this.actionType = actionType;
+	}
+
+	spec public boolean valid() {
+		return
+			( time != null && time >= 0 ) &&
+			( startSize != null && startSize >= 0 ) &&
+			( targetSize != null && targetSize >= 0);
+	}
+
+	public String toString() {
+		return "Time Action: (" + hashCode() + ")" + startSize + " -> " + targetSize + " @ " + time + "\n";
+    }
+}

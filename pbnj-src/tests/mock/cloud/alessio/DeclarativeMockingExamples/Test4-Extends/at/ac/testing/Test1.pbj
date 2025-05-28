@@ -1,0 +1,31 @@
+package at.ac.testing;
+
+import polyglot.ext.pbnj.tologic.LogMap;
+import at.ac.testing.mocks.SuperClass;
+import at.ac.testing.mocks.SubClass;
+import at.ac.testing.mocks.TimedAction;
+import at.ac.testing.mocks.NewSchedule;
+import java.util.Arrays;
+
+public class Test1 {        
+
+	public static void main(String[] args) {
+	    //LogMap.SolverOpt_debugLevel(2);
+
+	int stabilityPeriodUp = 10;
+	int stabilityPeriodDown = 10;
+	int controlPeriod = 3;
+	int actuationDelay = 0;
+
+	NewSchedule schedule = new NewSchedule();
+
+	schedule.actions = new TimedAction[] {//
+	    new TimedAction(1, 1,2, true),		// Scale up from 1 to 2 at time 1
+	    new TimedAction(2, 2,4, true),		// Scale up from 2 to 4 at time 2
+	    new TimedAction(3, 4,2, false),	// ...
+	    new TimedAction(4, 2,1, false)	// ...
+	};
+	
+	schedule.doForceStateConsistency();
+	}
+}

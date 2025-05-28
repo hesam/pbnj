@@ -1,0 +1,5 @@
+package at.ac.testing.pbnj.test6;
+
+public enum ActionType { 
+	SCALE_UP, SCALE_DOWN, STAY
+};

@@ -1,0 +1,8 @@
+#!/bin/sh
+# DO NOT EDIT - This file was automatically generated.
+
+JAVA='/Library/Java/JavaVirtualMachines/jdk1.7.0_21.jdk/Contents/Home/jre/bin/java'
+FILE_SEP='/'
+PATH_SEP=':'
+TOP='/Users/hesam/projects/research/planb/PBnJ'
+    

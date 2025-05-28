@@ -1,0 +1,51 @@
+package at.ac.testing.mocks;
+
+// import java.util.Arrays;
+
+
+/**
+* This class represent a monitoring sample that contains data about incoming workload and end-user
+* requests. It accounts for the amount and type of requests, and can be extended by specifying aggregations to
+* form SENSOR/MONITORING reading.
+*/
+
+public class RequestsCount
+	ensures valid() {
+	
+	// TODO: We start we a simple one request type model
+	// Count of request types
+	// spec int numRequestTypes;
+	// TODO: We start we a simple one request type model
+	// Amount of requests per type
+	// spec int[] counts;
+	
+	// Note that we can use Integer and force requests != null 
+	spec public int requests;
+
+	// Default constructor. Just one type of requests.
+	public RequestsCount() {
+		//this.numRequestTypes = 1;
+		//this.counts = new int[1];
+		// this.requests = 0;
+	}
+
+    // Class invariant. will be valid after any public method
+	spec public boolean valid() {
+		return 
+			requests >= 0;
+			// TODO
+			//counts != null && counts.length == numRequestTypes
+	    	//	&& all int i : 0 .. numRequestTypes - 1 | counts[i] >= 0;
+	}
+
+	//public void toRequests(int currentSize, int sensorValue)
+	//	modifies fields RequestsCount:requests
+	//	ensures this.requests == currentSize * sensorValue
+	//{
+	//}
+
+	public String toString() {
+		return "N Requests: " + requests;
+		// Arrays.toString(counts);
+    }
+}

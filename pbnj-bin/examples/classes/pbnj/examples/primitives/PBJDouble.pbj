@@ -1,0 +1,29 @@
+package pbnj.examples.primitives;
+
+import java.util.HashMap;
+
+public final primitive class PBJDouble
+    implements java.io.Serializable
+{
+    private Double value;
+    
+    private static HashMap<Double,PBJDouble> instances = new HashMap<Double,PBJDouble>();
+
+    public static PBJDouble get(Double original) {
+	if (instances.containsKey(original))
+	    return instances.get(original);
+	return new PBJDouble(original);
+    }
+
+    public PBJDouble(Double f) {
+	this.value = f;
+	if (!instances.containsKey(f))
+	    instances.put(f, this);
+    }
+
+    public Double value() { return value; }
+
+    public String toString() {
+	return value.toString();
+    }
+}

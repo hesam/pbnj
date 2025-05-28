@@ -1,0 +1,4 @@
+-only supported primitive spec fields: boolean, int
+-declared variables inside static initializer blocks are not recognized (JL5 polyglot extension bug)
+
+
