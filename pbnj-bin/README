@@ -11,7 +11,7 @@ Instructions
 
 A. Download PBnJ
 
-	 - download and untar PBnJ Compiler: http://www.hesam.us/planb/pbnj.tar.gz
+	 - download and untar PBnJ Compiler: pbnj/pbnj-bin/pbnj.tar.gz
 	 - set PBNJ_HOME to the directory
 	 - [optional] set PBNJ_CLASSPATH for adding anything to class path 
 
